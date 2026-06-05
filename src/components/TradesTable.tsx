@@ -71,6 +71,7 @@ export default function TradesTable() {
               const isWin = trade.outcome === "WIN"
               const isLoss = trade.outcome === "LOSS"
               const isPending = trade.outcome === "PENDING"
+              const isBuy = trade.direction === "BUY"
               
               const date = new Date(trade.createdAt)
               const timeString = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
@@ -90,8 +91,17 @@ export default function TradesTable() {
                   className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group cursor-pointer"
                 >
                   <td className="py-3 pl-2 align-middle">
-                    <div className="font-bold text-slate-800">{trade.pair || trade.asset}</div>
-                    <div className="text-[11px] text-slate-500 font-medium mt-0.5">{timeString}</div>
+                    <div className="flex flex-col justify-center">
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-slate-800 tracking-tight">{trade.pair || 'XAUUSD'}</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1.5 py-0.5 bg-slate-100 rounded">{trade.session || 'LONDON'} • {isBuy ? 'LONG' : 'SHORT'}</span>
+                      </div>
+                      {trade.title && (
+                        <div className="text-sm font-bold text-slate-700 mt-0.5 truncate max-w-[250px] md:max-w-[350px]">
+                          {trade.title}
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="py-3 align-middle text-center">
                     <div className="flex items-center justify-center gap-1.5 flex-wrap">
@@ -122,6 +132,10 @@ export default function TradesTable() {
       <SetupPreviewModal 
         isOpen={!!selectedTrade} 
         onClose={() => setSelectedTrade(null)} 
+        onUpdate={() => {
+          setSelectedTrade(null)
+          fetchTrades()
+        }}
         trade={selectedTrade} 
       />
     </div>

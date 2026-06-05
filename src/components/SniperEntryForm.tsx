@@ -7,6 +7,38 @@ import { supabase } from "@/lib/supabase"
 export default function SniperEntryForm({ className = "" }: { className?: string }) {
   const [direction, setDirection] = useState("BUY")
   const [risk, setRisk] = useState("0.5")
+  const [outcome, setOutcome] = useState("PENDING")
+  
+  const [asset, setAsset] = useState("XAUUSD")
+  const [timeframe, setTimeframe] = useState("M5")
+  const [entryDate, setEntryDate] = useState(() => {
+    const now = new Date()
+    return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+  })
+  const [preEmotion, setPreEmotion] = useState("CALM")
+  const [duringEmotion, setDuringEmotion] = useState("PATIENT")
+  
+  const [entryPrice, setEntryPrice] = useState("4445.50")
+  const [stopLoss, setStopLoss] = useState("4444.30")
+  const [takeProfit, setTakeProfit] = useState("4451.30")
+
+  const pips = useMemo(() => {
+    const ep = parseFloat(entryPrice)
+    const sl = parseFloat(stopLoss)
+    if (!isNaN(ep) && !isNaN(sl)) return Math.abs(ep - sl).toFixed(1)
+    return "0.0"
+  }, [entryPrice, stopLoss])
+
+  const targetRR = useMemo(() => {
+    const ep = parseFloat(entryPrice)
+    const sl = parseFloat(stopLoss)
+    const tp = parseFloat(takeProfit)
+    if (!isNaN(ep) && !isNaN(sl) && !isNaN(tp) && ep !== sl) {
+      return (Math.abs(tp - ep) / Math.abs(ep - sl)).toFixed(2)
+    }
+    return "0.00"
+  }, [entryPrice, stopLoss, takeProfit])
+
   const [tags, setTags] = useState({
     extSweep: true,
     intSweep: false,
@@ -107,18 +139,24 @@ export default function SniperEntryForm({ className = "" }: { className?: string
     }
 
     const data = {
-      asset: "XAUUSD", // Currently hardcoded in the precision section header
+      title: formData.get("title"),
+      asset,
+      timeframe,
+      entryDate: new Date(entryDate).toISOString(),
       direction,
       riskPercent: risk,
       lotSize: formData.get("lotSize"),
       session: formData.get("session"),
-      entryPrice: formData.get("entryPrice"),
-      stopLoss: formData.get("stopLoss"),
-      takeProfit: formData.get("takeProfit"),
+      entryPrice,
+      stopLoss,
+      takeProfit,
       narrative: formData.get("narrative"),
+      outcome,
       tags,
       checklist,
-      imageUrl
+      imageUrl,
+      preEmotion,
+      duringEmotion
     };
 
     try {
@@ -155,7 +193,35 @@ export default function SniperEntryForm({ className = "" }: { className?: string
         {/* Transaction Setup */}
         <div>
           <h3 className="text-[11px] font-bold text-slate-500 mb-3 uppercase tracking-wider">TRANSACTION SETUP</h3>
-          <div className="flex items-center gap-2 mb-3">
+          
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Asset</span>
+              <select value={asset} onChange={e => setAsset(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-sky-500">
+                <option value="XAUUSD">XAUUSD</option>
+                <option value="EURUSD">EURUSD</option>
+                <option value="GBPUSD">GBPUSD</option>
+                <option value="BTCUSD">BTCUSD</option>
+                <option value="NASDAQ">NASDAQ</option>
+              </select>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Timeframe</span>
+              <select value={timeframe} onChange={e => setTimeframe(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-sky-500">
+                <option value="M1">1m</option>
+                <option value="M5">5m</option>
+                <option value="M15">15m</option>
+                <option value="H1">1h</option>
+                <option value="H4">4h</option>
+              </select>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Date & Time</span>
+              <input type="datetime-local" value={entryDate} onChange={e => setEntryDate(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-sky-500" />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 mb-3 pt-3 border-t border-slate-100">
             <button 
               type="button"
               onClick={() => setDirection("BUY")}
@@ -195,23 +261,46 @@ export default function SniperEntryForm({ className = "" }: { className?: string
               </select>
             </div>
           </div>
+
+          <div className="flex items-center gap-4 text-xs mt-3 pt-3 border-t border-slate-100">
+            <span className="font-medium text-slate-500">Outcome:</span>
+            <div className="flex gap-2">
+              {['PENDING', 'WIN', 'LOSS', 'BE'].map(status => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => setOutcome(status)}
+                  className={`px-3 py-1 rounded border text-xs font-bold transition-colors ${
+                    outcome === status 
+                      ? status === 'WIN' ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
+                        : status === 'LOSS' ? 'bg-rose-50 border-rose-200 text-rose-600'
+                        : status === 'BE' ? 'bg-amber-50 border-amber-200 text-amber-600'
+                        : 'bg-slate-800 border-slate-800 text-white'
+                      : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                  }`}
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Precision Entry Data */}
         <div>
-          <h3 className="text-[11px] font-bold text-slate-500 mb-3 uppercase tracking-wider">PRECISION ENTRY DATA (XAUUSD 4K+)</h3>
+          <h3 className="text-[11px] font-bold text-slate-500 mb-3 uppercase tracking-wider">PRECISION ENTRY DATA</h3>
           <div className="grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-3 items-center text-xs">
             <span className="font-medium text-slate-500 text-right">Entry:</span>
-            <input name="entryPrice" type="text" defaultValue="4445.50" className="bg-slate-50 border border-slate-200 rounded px-3 py-1.5 text-slate-800 focus:outline-none focus:border-sky-500" />
+            <input value={entryPrice} onChange={e => setEntryPrice(e.target.value)} type="number" step="0.00001" className="bg-slate-50 border border-slate-200 rounded px-3 py-1.5 text-slate-800 focus:outline-none focus:border-sky-500" />
             <span></span>
             
             <span className="font-medium text-slate-500 text-right">SL:</span>
-            <input name="stopLoss" type="text" defaultValue="4444.30" className="bg-slate-50 border border-slate-200 rounded px-3 py-1.5 text-slate-800 focus:outline-none focus:border-sky-500" />
-            <span className="text-slate-500">&rarr; (1.2 pips)</span>
+            <input value={stopLoss} onChange={e => setStopLoss(e.target.value)} type="number" step="0.00001" className="bg-slate-50 border border-slate-200 rounded px-3 py-1.5 text-slate-800 focus:outline-none focus:border-sky-500" />
+            <span className="text-slate-500">&rarr; ({pips} pips/pts)</span>
             
             <span className="font-medium text-slate-500 text-right">TP:</span>
-            <input name="takeProfit" type="text" defaultValue="4451.30" className="bg-slate-50 border border-slate-200 rounded px-3 py-1.5 text-slate-800 focus:outline-none focus:border-sky-500" />
-            <span className="text-slate-500">&rarr; (Target: 4.83R)</span>
+            <input value={takeProfit} onChange={e => setTakeProfit(e.target.value)} type="number" step="0.00001" className="bg-slate-50 border border-slate-200 rounded px-3 py-1.5 text-slate-800 focus:outline-none focus:border-sky-500" />
+            <span className="text-slate-500">&rarr; (Target: {targetRR}R)</span>
           </div>
         </div>
 
@@ -279,9 +368,43 @@ export default function SniperEntryForm({ className = "" }: { className?: string
           </div>
         </div>
 
+        {/* Psychology */}
+        <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+           <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-4">PSYCHOLOGY & EMOTIONS</h3>
+           <div className="grid grid-cols-2 gap-4">
+              <div>
+                 <span className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">Before Trade</span>
+                 <select value={preEmotion} onChange={e => setPreEmotion(e.target.value)} className="w-full bg-white border border-slate-200 rounded px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-sky-500">
+                    <option value="CALM">Calm</option>
+                    <option value="FOMO">FOMO</option>
+                    <option value="BORED">Bored</option>
+                    <option value="PANIC">Panic</option>
+                    <option value="PATIENT">Patient</option>
+                 </select>
+              </div>
+              <div>
+                 <span className="text-[10px] font-bold text-slate-400 uppercase mb-2 block">During Trade</span>
+                 <select value={duringEmotion} onChange={e => setDuringEmotion(e.target.value)} className="w-full bg-white border border-slate-200 rounded px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-sky-500">
+                    <option value="CALM">Calm</option>
+                    <option value="FOMO">FOMO</option>
+                    <option value="BORED">Bored</option>
+                    <option value="PANIC">Panic</option>
+                    <option value="PATIENT">Patient</option>
+                 </select>
+              </div>
+           </div>
+        </div>
+
         {/* Trade Narrative / Notes */}
         <div>
-          <h3 className="text-[11px] font-bold text-slate-500 mb-3 uppercase tracking-wider">TRADE NARRATIVE / NOTES</h3>
+          <h3 className="text-[11px] font-bold text-slate-500 mb-3 uppercase tracking-wider">SETUP TITLE & NARRATIVE</h3>
+          <input 
+            name="title"
+            type="text"
+            placeholder="e.g. London Session Sweep & Reversal"
+            maxLength={60}
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 mb-3 text-slate-800 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all placeholder:text-slate-400 placeholder:font-normal"
+          />
           <textarea 
             name="narrative"
             rows={3}
