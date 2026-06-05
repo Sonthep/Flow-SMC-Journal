@@ -1,76 +1,34 @@
 "use client"
-import { useState } from "react"
-import { ScrollText } from "lucide-react"
+import { useState, useEffect } from "react"
+import { ScrollText, Loader2 } from "lucide-react"
 import SetupPreviewModal from "./SetupPreviewModal"
 
 export default function TradesTable() {
-  const recentTrades = [
-    {
-      id: "1",
-      asset: "XAUUSD",
-      time: "11:39",
-      tf: "M1",
-      tags: ["SWEEP", "M1-BODY"],
-      rr: "+4.81R",
-      outcome: "WIN",
-    },
-    {
-      id: "2",
-      asset: "XAUUSD",
-      time: "12:04",
-      tf: "M1",
-      tags: ["CHOCH", "OB-FILL"],
-      rr: "+3.33R",
-      outcome: "WIN",
-    },
-    {
-      id: "3",
-      asset: "XAUUSD",
-      time: "13:15",
-      tf: "M1",
-      tags: ["SWEEP", "M1-WICK"],
-      rr: "-1.00R",
-      outcome: "LOS",
-    },
-    {
-      id: "4",
-      asset: "XAUUSD",
-      time: "12:38",
-      tf: "M1",
-      tags: ["FVG", "BOS"],
-      rr: "+4.30R",
-      outcome: "WIN",
-    },
-    {
-      id: "5",
-      asset: "XAUUSD",
-      time: "12:38",
-      tf: "M1",
-      tags: ["SWEEP", "BOS"],
-      rr: "+2.33R",
-      outcome: "WIN",
-    },
-    {
-      id: "6",
-      asset: "XAUUSD",
-      time: "12:09",
-      tf: "M1",
-      tags: ["FVG", "BOS"],
-      rr: "+3.33R",
-      outcome: "WIN",
-    },
-    {
-      id: "7",
-      asset: "XAUUSD",
-      time: "13:35",
-      tf: "M1",
-      tags: ["FVG", "BOS"],
-      rr: "-1.00R",
-      outcome: "LOS",
-    }
-  ]
-
+  const [recentTrades, setRecentTrades] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [selectedTrade, setSelectedTrade] = useState<any>(null)
+
+  const fetchTrades = async () => {
+    try {
+      const res = await fetch('/api/trades');
+      const data = await res.json();
+      if (data.success) {
+        setRecentTrades(data.trades);
+      }
+    } catch (err) {
+      console.error("Error fetching trades:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    fetchTrades();
+    
+    // Simple polling every 10 seconds to keep dashboard fresh
+    const interval = setInterval(fetchTrades, 10000);
+    return () => clearInterval(interval);
+  }, [])
 
   return (
     <div className="bg-white rounded-[1.5rem] p-6 flex flex-col h-full shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
@@ -94,8 +52,37 @@ export default function TradesTable() {
             </tr>
           </thead>
           <tbody className="text-xs">
-            {recentTrades.map((trade) => {
+            {isLoading ? (
+              <tr>
+                <td colSpan={3} className="py-8 text-center text-slate-400">
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="size-4 animate-spin" />
+                    <span>Loading trades...</span>
+                  </div>
+                </td>
+              </tr>
+            ) : recentTrades.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="py-8 text-center text-slate-400">
+                  No trades recorded yet. Log your first setup!
+                </td>
+              </tr>
+            ) : recentTrades.map((trade) => {
               const isWin = trade.outcome === "WIN"
+              const isLoss = trade.outcome === "LOSS"
+              const isPending = trade.outcome === "PENDING"
+              
+              const date = new Date(trade.createdAt)
+              const timeString = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+              
+              // Map tags
+              const tags = []
+              if (trade.hasChoch) tags.push("CHOCH")
+              if (trade.entryZone === "FVG") tags.push("FVG")
+              else tags.push("OB")
+              if (trade.sweepType === "EXTERNAL_MAJOR") tags.push("EXT-SWEEP")
+              else tags.push("INT-SWEEP")
+              
               return (
                 <tr 
                   key={trade.id} 
@@ -103,12 +90,12 @@ export default function TradesTable() {
                   className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group cursor-pointer"
                 >
                   <td className="py-3 pl-2 align-middle">
-                    <div className="font-bold text-slate-800">{trade.asset}</div>
-                    <div className="text-[11px] text-slate-500 font-medium mt-0.5">{trade.time} {trade.tf}</div>
+                    <div className="font-bold text-slate-800">{trade.pair || trade.asset}</div>
+                    <div className="text-[11px] text-slate-500 font-medium mt-0.5">{timeString}</div>
                   </td>
                   <td className="py-3 align-middle text-center">
                     <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                      {trade.tags.map(tag => (
+                      {tags.map((tag: string) => (
                         <span key={tag} className="text-[10px] font-bold text-slate-500 tracking-wide border border-slate-200 px-1.5 py-0.5 rounded bg-slate-50">
                           [{tag}]
                         </span>
@@ -117,10 +104,10 @@ export default function TradesTable() {
                   </td>
                   <td className="py-3 pr-2 align-middle text-right">
                     <div className="flex items-center justify-end gap-3">
-                      <span className={`font-mono font-bold ${isWin ? 'text-emerald-500' : 'text-rose-500'}`}>
-                        {trade.rr}
+                      <span className={`font-mono font-bold ${isWin ? 'text-emerald-500' : isLoss ? 'text-rose-500' : 'text-slate-500'}`}>
+                        {trade.realizedRR ? `${trade.realizedRR > 0 ? '+' : ''}${trade.realizedRR}R` : '---'}
                       </span>
-                      <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wider border ${isWin ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-rose-50 text-rose-600 border-rose-200'}`}>
+                      <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wider border ${isWin ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : isLoss ? 'bg-rose-50 text-rose-600 border-rose-200' : isPending ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
                         {trade.outcome}
                       </span>
                     </div>
