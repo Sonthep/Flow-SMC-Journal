@@ -2,10 +2,13 @@
 
 import { useState } from "react"
 import Header from "@/components/Header"
-import { Search, Filter, Download, ChevronLeft, ChevronRight, Calendar as CalendarIcon, List } from "lucide-react"
+import { Search, Filter, Download, ChevronLeft, ChevronRight, Calendar as CalendarIcon, List, X, LayoutGrid } from "lucide-react"
+import SetupPreviewModal from "@/components/SetupPreviewModal"
 
 export default function JournalPage() {
   const [viewMode, setViewMode] = useState<"list" | "calendar">("calendar")
+  const [selectedDay, setSelectedDay] = useState<number | null>(null)
+  const [selectedTrade, setSelectedTrade] = useState<any>(null)
 
   // List View Trades Data
   const trades = [
@@ -151,9 +154,10 @@ export default function JournalPage() {
                       return (
                         <div 
                           key={dIndex} 
+                          onClick={() => dayData.trades > 0 && setSelectedDay(dayData.day)}
                           className={`
                             relative rounded-2xl p-4 flex flex-col transition-all cursor-pointer min-h-[110px]
-                            ${!dayData.isCurrentMonth ? 'opacity-30 bg-transparent border-transparent' : 'bg-white shadow-sm border border-slate-100 hover:shadow-md hover:border-sky-200'}
+                            ${!dayData.isCurrentMonth ? 'opacity-30 bg-transparent border-transparent' : 'bg-white shadow-sm border border-slate-100 hover:shadow-md hover:border-sky-200 hover:-translate-y-0.5'}
                             ${isWin ? 'bg-gradient-to-br from-white to-emerald-50/30' : ''}
                             ${isLoss ? 'bg-gradient-to-br from-white to-rose-50/30' : ''}
                           `}
@@ -254,6 +258,112 @@ export default function JournalPage() {
 
         </div>
       </main>
+
+      {/* Daily Trades Modal */}
+      {selectedDay && (
+        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setSelectedDay(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl overflow-hidden flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-3">
+                <div className="bg-sky-100 text-sky-600 w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg">
+                  {selectedDay}
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-lg leading-tight">Daily Execution Log</h3>
+                  <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider">June {selectedDay}, 2026</p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedDay(null)} className="p-2 text-slate-400 hover:text-slate-700 bg-white rounded-full shadow-sm border border-slate-200 transition-colors">
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="overflow-auto p-6 bg-slate-50">
+              {trades.filter(t => parseInt(t.date.split('-')[2]) === selectedDay).length === 0 ? (
+                <div className="flex items-center justify-center p-12 text-slate-400 font-medium">
+                  No trade details available for this mockup day. Try clicking on days 2, 3, 4, or 5.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+                  {trades.filter(t => parseInt(t.date.split('-')[2]) === selectedDay).map(trade => {
+                    const isWin = trade.outcome === "WIN";
+                    const isLoss = trade.outcome === "LOSS";
+                    const isBuy = trade.dir === "BUY";
+                    
+                    return (
+                      <div 
+                        key={trade.id} 
+                        onClick={() => setSelectedTrade({
+                          id: trade.id,
+                          asset: trade.pair,
+                          dir: trade.dir,
+                          outcome: trade.outcome,
+                          rr: trade.rr,
+                          entry: trade.entry,
+                          sl: "1.08300", // mock
+                          tp: trade.exit,
+                          tags: trade.tags,
+                          time: "09:30",
+                          tf: "M5"
+                        })}
+                        className="border border-slate-200 rounded-xl overflow-hidden hover:shadow-lg transition-all bg-white flex flex-col cursor-pointer group"
+                      >
+                        <div className="h-[140px] bg-slate-100 w-full relative overflow-hidden border-b border-slate-100">
+                          {/* Mock Chart Image */}
+                          <img 
+                            src="https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=600&auto=format&fit=crop" 
+                            alt="Chart" 
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 grayscale-[20%]" 
+                          />
+                          <div className="absolute top-2 right-2 bg-slate-900/80 backdrop-blur-sm text-white text-[9px] font-bold px-2 py-1 rounded">
+                            {trade.pair}
+                          </div>
+                          <div className={`absolute bottom-2 right-2 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm backdrop-blur-sm ${isWin ? 'bg-emerald-500/90' : isLoss ? 'bg-rose-500/90' : 'bg-slate-500/90'}`}>
+                            {trade.rr}
+                          </div>
+                        </div>
+                        <div className="p-4 flex flex-col gap-3 flex-1">
+                          <div className="text-[11px] text-slate-500 font-medium">
+                            {trade.date} • 09:30 AM
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${isWin ? 'bg-emerald-100 text-emerald-700' : isLoss ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'}`}>
+                              {trade.outcome}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${isBuy ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                              {isBuy ? 'Bullish' : 'Bearish'}
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-wider">
+                              M5
+                            </span>
+                            {trade.tags.map(tag => (
+                              <span key={tag} className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-wider truncate max-w-[120px]">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  
+                  {/* New Page Card */}
+                  <div className="border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center h-full min-h-[200px] hover:bg-white hover:border-sky-300 hover:shadow-md transition-all cursor-pointer text-slate-400 hover:text-sky-500 group">
+                    <div className="flex items-center gap-2 font-bold text-sm">
+                      <span className="text-xl">+</span> New page
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <SetupPreviewModal 
+        isOpen={!!selectedTrade} 
+        onClose={() => setSelectedTrade(null)} 
+        trade={selectedTrade} 
+      />
     </>
   )
 }

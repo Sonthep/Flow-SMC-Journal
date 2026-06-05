@@ -1,135 +1,297 @@
 "use client"
 
+import React, { useState, useEffect, useRef } from "react"
 import Header from "@/components/Header"
-import { Play, SkipForward, Rewind, Pause, Maximize2, Settings2, Crosshair, BarChart2 } from "lucide-react"
+import { Play, SkipForward, Rewind, Pause, Maximize2, Settings2, Crosshair, BarChart2, Upload, FileText } from "lucide-react"
+import { createChart, CandlestickSeries, IChartApi, ISeriesApi, CandlestickData, Time } from "lightweight-charts"
 
 export default function BacktestingPage() {
+  const chartContainerRef = useRef<HTMLDivElement>(null)
+  const chartRef = useRef<IChartApi | null>(null)
+  const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null)
+  
+  const [fullData, setFullData] = useState<CandlestickData[]>([])
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [playbackSpeed, setPlaybackSpeed] = useState(1000) // ms per candle
+  const [fileName, setFileName] = useState<string | null>(null)
+
+  // Initialize Chart
+  useEffect(() => {
+    if (!chartContainerRef.current) return
+
+    const chart = createChart(chartContainerRef.current, {
+      layout: {
+        background: { color: '#ffffff' },
+        textColor: '#64748b',
+      },
+      grid: {
+        vertLines: { color: '#f1f5f9' },
+        horzLines: { color: '#f1f5f9' },
+      },
+      crosshair: {
+        mode: 1, // Normal mode
+      },
+      timeScale: {
+        timeVisible: true,
+        secondsVisible: false,
+      },
+      width: chartContainerRef.current.clientWidth,
+      height: chartContainerRef.current.clientHeight,
+    })
+
+    const candlestickSeries = chart.addSeries(CandlestickSeries, {
+      upColor: '#10b981',
+      downColor: '#f43f5e',
+      borderVisible: false,
+      wickUpColor: '#10b981',
+      wickDownColor: '#f43f5e',
+    })
+
+    chartRef.current = chart
+    seriesRef.current = candlestickSeries
+
+    const handleResize = () => {
+      if (chartContainerRef.current) {
+        chart.applyOptions({ width: chartContainerRef.current.clientWidth, height: chartContainerRef.current.clientHeight })
+      }
+    }
+
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      chart.remove()
+    }
+  }, [])
+
+  // Handle Playback Loop
+  useEffect(() => {
+    let interval: NodeJS.Timeout
+
+    if (isPlaying && fullData.length > 0 && currentIndex < fullData.length) {
+      interval = setInterval(() => {
+        setCurrentIndex(prev => {
+          if (prev + 1 >= fullData.length) {
+            setIsPlaying(false)
+            return prev
+          }
+          return prev + 1
+        })
+      }, playbackSpeed)
+    }
+
+    return () => clearInterval(interval)
+  }, [isPlaying, currentIndex, fullData, playbackSpeed])
+
+  // Update Chart when currentIndex changes
+  useEffect(() => {
+    if (seriesRef.current && fullData.length > 0) {
+      // Show data up to current index
+      const visibleData = fullData.slice(0, currentIndex + 1)
+      seriesRef.current.setData(visibleData)
+    }
+  }, [currentIndex, fullData])
+
+  // CSV Parsing
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setFileName(file.name)
+    const reader = new FileReader()
+    
+    reader.onload = (event) => {
+      const text = event.target?.result as string
+      const lines = text.split('\n')
+      
+      const parsedData: CandlestickData[] = []
+      
+      // Basic CSV parsing assuming format: Date,Open,High,Low,Close (or similar)
+      // Works with common MT4/MT5 CSV exports
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim()
+        if (!line) continue
+        
+        const cols = line.split(',')
+        if (cols.length < 5) continue
+
+        try {
+          // Attempt to parse Date. If it's "YYYY.MM.DD HH:MM", convert to timestamp
+          let timeVal: Time
+          let dateStr = cols[0]
+          // If there's a separate time column (MT4 style)
+          if (cols[1].includes(':')) {
+            dateStr = cols[0].replace(/\./g, '-') + 'T' + cols[1]
+          }
+          
+          const timestamp = new Date(dateStr).getTime() / 1000
+          if (isNaN(timestamp)) continue
+
+          timeVal = timestamp as Time
+
+          // Extract OHLC (assuming standard MT4 export order: Date, Time, Open, High, Low, Close)
+          let oIdx = 1, hIdx = 2, lIdx = 3, cIdx = 4
+          if (cols[1].includes(':')) { // MT4 format
+            oIdx = 2; hIdx = 3; lIdx = 4; cIdx = 5
+          }
+
+          parsedData.push({
+            time: timeVal,
+            open: parseFloat(cols[oIdx]),
+            high: parseFloat(cols[hIdx]),
+            low: parseFloat(cols[lIdx]),
+            close: parseFloat(cols[cIdx])
+          })
+        } catch (err) {
+          console.error("Parse error on line", i, err)
+        }
+      }
+
+      if (parsedData.length > 0) {
+        // Sort by time just in case
+        parsedData.sort((a, b) => (a.time as number) - (b.time as number))
+        
+        setFullData(parsedData)
+        // Start by showing the first 100 candles
+        const startIndex = Math.min(100, parsedData.length - 1)
+        setCurrentIndex(startIndex)
+        
+        if (seriesRef.current) {
+          seriesRef.current.setData(parsedData.slice(0, startIndex + 1))
+          chartRef.current?.timeScale().fitContent()
+        }
+      } else {
+        alert("Could not parse valid OHLC data from CSV. Please check the format.")
+      }
+    }
+
+    reader.readAsText(file)
+  }
+
+  const togglePlay = () => setIsPlaying(!isPlaying)
+  const stepForward = () => {
+    setIsPlaying(false)
+    if (currentIndex < fullData.length - 1) setCurrentIndex(prev => prev + 1)
+  }
+
   return (
     <>
       <Header />
       <main className="p-4 sm:p-6 lg:p-8 max-w-[1600px] w-full mx-auto flex-1 flex flex-col overflow-hidden h-[calc(100vh-80px)]">
         
-        <div className="flex items-center justify-between mb-4 shrink-0">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 shrink-0 gap-4">
           <div className="flex items-center gap-3">
-            <h2 className="text-xl font-bold text-slate-800">Advanced Simulator</h2>
-            <div className="bg-sky-50 text-sky-600 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest border border-sky-100">
-              Live Session
+            <h2 className="text-xl font-bold text-slate-800">Custom CSV Backtester</h2>
+            <div className="bg-emerald-50 text-emerald-600 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest border border-emerald-100">
+              {fullData.length > 0 ? "Data Loaded" : "Waiting for Data"}
             </div>
           </div>
           
-          {/* Simulator Controls */}
-          <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
-            <button className="p-2 text-slate-400 hover:text-slate-700 transition-colors"><Rewind className="size-4" /></button>
-            <button className="p-2 text-sky-500 hover:text-sky-600 transition-colors"><Pause className="size-4" /></button>
-            <button className="p-2 text-slate-400 hover:text-slate-700 transition-colors"><Play className="size-4 fill-current" /></button>
-            <button className="p-2 text-slate-400 hover:text-slate-700 transition-colors"><SkipForward className="size-4" /></button>
-            <div className="w-px h-4 bg-slate-200 mx-2"></div>
-            <span className="text-xs font-bold text-slate-600 px-2">1x Speed</span>
+          {/* Simulator Controls & Upload */}
+          <div className="flex items-center gap-4">
+            
+            {/* CSV Uploader */}
+            <div className="relative">
+              <input 
+                type="file" 
+                accept=".csv" 
+                onChange={handleFileUpload} 
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
+              <button className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm">
+                <Upload className="size-4" />
+                {fileName ? "Change CSV File" : "Upload History CSV"}
+              </button>
+            </div>
+
+            {/* Playback Tools */}
+            <div className={`flex items-center bg-white border border-slate-200 rounded-lg p-1 shadow-sm transition-opacity ${fullData.length === 0 ? 'opacity-50 pointer-events-none' : ''}`}>
+              <button 
+                onClick={togglePlay}
+                className={`p-2 transition-colors ${isPlaying ? 'text-emerald-500 hover:text-emerald-600' : 'text-slate-400 hover:text-sky-500'}`}
+              >
+                {isPlaying ? <Pause className="size-4" /> : <Play className="size-4 fill-current" />}
+              </button>
+              <button onClick={stepForward} className="p-2 text-slate-400 hover:text-slate-700 transition-colors">
+                <SkipForward className="size-4" />
+              </button>
+              <div className="w-px h-4 bg-slate-200 mx-2"></div>
+              
+              {/* Speed selector */}
+              <select 
+                value={playbackSpeed} 
+                onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
+                className="text-xs font-bold text-slate-600 bg-transparent border-none focus:ring-0 py-1 pl-2 pr-6 cursor-pointer"
+              >
+                <option value={1000}>1x Speed (1s)</option>
+                <option value={500}>2x Speed (0.5s)</option>
+                <option value={100}>5x Speed (0.1s)</option>
+                <option value={10}>Max Speed</option>
+              </select>
+            </div>
           </div>
         </div>
 
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-6 min-h-0">
           
-          {/* Chart Area (Left Side - 3 Columns) */}
+          {/* Chart Area */}
           <div className="lg:col-span-3 bg-white rounded-[1.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col overflow-hidden relative">
             
             {/* Chart Toolbar */}
             <div className="h-14 border-b border-slate-100 flex items-center justify-between px-4 bg-slate-50/50">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-slate-800 text-sm">EURUSD</span>
+                  <span className="font-bold text-slate-800 text-sm">
+                    {fileName ? fileName.replace('.csv', '').toUpperCase() : 'XAUUSD (Awaiting CSV)'}
+                  </span>
                   <span className="text-slate-300">|</span>
-                  <span className="text-sky-500 font-bold text-sm">1M</span>
-                  <span className="text-slate-300">|</span>
-                  <span className="text-slate-500 font-medium text-xs">OANDA</span>
+                  <span className="text-slate-500 font-medium text-xs">LOCAL DATA</span>
                 </div>
               </div>
-              <div className="flex items-center gap-3 text-slate-400">
-                <Crosshair className="size-4 cursor-pointer hover:text-slate-700 transition-colors" />
-                <BarChart2 className="size-4 cursor-pointer hover:text-slate-700 transition-colors" />
-                <Settings2 className="size-4 cursor-pointer hover:text-slate-700 transition-colors" />
-                <div className="w-px h-4 bg-slate-200 mx-1"></div>
-                <Maximize2 className="size-4 cursor-pointer hover:text-slate-700 transition-colors" />
+              <div className="flex items-center gap-3 text-slate-400 text-xs font-bold uppercase tracking-wider">
+                {fullData.length > 0 ? (
+                  <span>Bar: {currentIndex + 1} / {fullData.length}</span>
+                ) : (
+                  <span>No data loaded</span>
+                )}
               </div>
             </div>
 
-            {/* Mock Candlestick Chart Area */}
-            <div className="flex-1 relative bg-slate-50/30 overflow-hidden flex items-center justify-center">
-              {/* Background Grid Lines */}
-              <div className="absolute inset-0" style={{ backgroundSize: '40px 40px', backgroundImage: 'linear-gradient(to right, #f1f5f9 1px, transparent 1px), linear-gradient(to bottom, #f1f5f9 1px, transparent 1px)' }}></div>
-              
-              {/* Price Axis (Right) */}
-              <div className="absolute right-0 top-0 bottom-0 w-16 bg-white border-l border-slate-100 flex flex-col justify-between py-10 text-[10px] text-slate-400 font-mono text-center z-10">
-                <span>1.08600</span>
-                <span>1.08550</span>
-                <span>1.08500</span>
-                <span className="text-sky-500 font-bold bg-sky-50 py-1 border-y border-sky-100">1.08472</span>
-                <span>1.08400</span>
-                <span>1.08350</span>
-                <span>1.08300</span>
-              </div>
-
-              {/* Mock Candles SVG */}
-              <div className="absolute inset-0 right-16 px-10 pt-20">
-                <svg className="w-full h-full" viewBox="0 0 800 400" preserveAspectRatio="none">
-                  {/* Bearish Candle */}
-                  <line x1="50" y1="100" x2="50" y2="180" stroke="#f43f5e" strokeWidth="2" />
-                  <rect x="44" y="120" width="12" height="40" fill="#f43f5e" />
-                  
-                  {/* Bullish Candle */}
-                  <line x1="90" y1="150" x2="90" y2="220" stroke="#10b981" strokeWidth="2" />
-                  <rect x="84" y="160" width="12" height="50" fill="#10b981" />
-                  
-                  {/* Bearish Candle */}
-                  <line x1="130" y1="180" x2="130" y2="260" stroke="#f43f5e" strokeWidth="2" />
-                  <rect x="124" y="200" width="12" height="40" fill="#f43f5e" />
-
-                  {/* Bullish Candle - Big push */}
-                  <line x1="170" y1="120" x2="170" y2="250" stroke="#10b981" strokeWidth="2" />
-                  <rect x="164" y="140" width="12" height="100" fill="#10b981" />
-
-                  {/* Small Bearish */}
-                  <line x1="210" y1="130" x2="210" y2="160" stroke="#f43f5e" strokeWidth="2" />
-                  <rect x="204" y="135" width="12" height="15" fill="#f43f5e" />
-
-                  {/* Doji */}
-                  <line x1="250" y1="120" x2="250" y2="170" stroke="#10b981" strokeWidth="2" />
-                  <rect x="244" y="145" width="12" height="2" fill="#10b981" />
-
-                  {/* Current Active Candle */}
-                  <line x1="290" y1="100" x2="290" y2="150" stroke="#10b981" strokeWidth="2" />
-                  <rect x="284" y="110" width="12" height="35" fill="#10b981" className="animate-pulse" />
-
-                  {/* Mock SMC Zone Box */}
-                  <rect x="250" y="80" width="200" height="30" fill="rgba(14, 165, 233, 0.1)" stroke="rgba(14, 165, 233, 0.3)" strokeWidth="1" strokeDasharray="4 4" />
-                  <text x="255" y="100" fontSize="10" fill="#0ea5e9" fontWeight="bold">15m Order Block</text>
-                </svg>
-
-                {/* Current Price Line */}
-                <div className="absolute left-0 right-0 border-t border-dashed border-sky-400" style={{ top: '40%' }}>
-                  <div className="absolute right-0 translate-x-full bg-sky-500 text-white text-[10px] font-mono px-2 py-0.5 rounded-l -mt-2">
-                    1.08472
-                  </div>
+            {/* Lightweight Chart Container */}
+            <div 
+              ref={chartContainerRef} 
+              className="flex-1 relative bg-white w-full h-full"
+            />
+            
+            {/* Empty State Overlay */}
+            {fullData.length === 0 && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm z-10">
+                <FileText className="size-12 text-slate-300 mb-4" />
+                <h3 className="text-lg font-bold text-slate-700">No Chart Data</h3>
+                <p className="text-sm text-slate-500 mt-2 max-w-md text-center">
+                  To begin backtesting, please upload a historical CSV file containing OHLC data (e.g. from MT4, MT5, or Dukascopy).
+                </p>
+                <div className="mt-6 relative">
+                  <input 
+                    type="file" 
+                    accept=".csv" 
+                    onChange={handleFileUpload} 
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  <button className="bg-sky-500 hover:bg-sky-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md shadow-sky-500/20 transition-all">
+                    Browse CSV File
+                  </button>
                 </div>
               </div>
-            </div>
-
-            {/* Time Axis (Bottom) */}
-            <div className="h-8 bg-white border-t border-slate-100 flex items-center justify-around px-10 text-[10px] text-slate-400 font-mono pr-16">
-              <span>08:00</span>
-              <span>08:15</span>
-              <span>08:30</span>
-              <span>08:45</span>
-              <span>09:00</span>
-              <span>09:15</span>
-            </div>
+            )}
           </div>
 
           {/* Execution Panel (Right Side - 1 Column) */}
           <div className="lg:col-span-1 flex flex-col gap-6 overflow-y-auto">
             
             {/* Order Entry */}
-            <div className="bg-white rounded-[1.5rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 shrink-0">
+            <div className={`bg-white rounded-[1.5rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 shrink-0 transition-opacity ${fullData.length === 0 ? 'opacity-50 pointer-events-none' : ''}`}>
               <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-4">Order Entry</h3>
               
               <div className="flex items-center gap-2 mb-4 bg-slate-50 p-1 rounded-xl border border-slate-100">
@@ -149,17 +311,15 @@ export default function BacktestingPage() {
                 <div className="grid grid-cols-[1fr_auto] gap-3 items-center">
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">SL</span>
-                    <input type="number" defaultValue="1.08400" className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-sky-500 text-slate-800 font-mono" />
+                    <input type="number" placeholder="Price" className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-sky-500 text-slate-800 font-mono" />
                   </div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">7.2 Pips</span>
                 </div>
 
                 <div className="grid grid-cols-[1fr_auto] gap-3 items-center">
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">TP</span>
-                    <input type="number" defaultValue="1.08688" className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-sky-500 text-slate-800 font-mono" />
+                    <input type="number" placeholder="Price" className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-sky-500 text-slate-800 font-mono" />
                   </div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">3.0 RR</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 pt-2">

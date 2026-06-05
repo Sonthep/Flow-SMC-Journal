@@ -1,11 +1,14 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { LayoutDashboard, BookOpen, LineChart, Settings, HelpCircle, LogOut, PlusCircle } from "lucide-react"
+import AddTradeSlideOver from "./AddTradeSlideOver"
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const [isAddTradeOpen, setIsAddTradeOpen] = useState(false)
 
   const navItems = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -53,7 +56,10 @@ export default function Sidebar() {
 
       {/* Bottom Actions */}
       <div className="p-4 space-y-4 border-t border-slate-100 mt-auto">
-        <button className="w-full bg-sky-400 hover:bg-sky-500 text-white font-bold py-3.5 px-4 rounded-xl transition-colors focus:outline-none shadow-md shadow-sky-500/20 flex items-center justify-center gap-2 text-sm tracking-wide">
+        <button 
+          onClick={() => setIsAddTradeOpen(true)}
+          className="w-full bg-sky-400 hover:bg-sky-500 text-white font-bold py-3.5 px-4 rounded-xl transition-colors focus:outline-none shadow-md shadow-sky-500/20 flex items-center justify-center gap-2 text-sm tracking-wide"
+        >
           <PlusCircle className="size-4" />
           New Trade
         </button>
@@ -69,6 +75,9 @@ export default function Sidebar() {
           </button>
         </div>
       </div>
+
+      {/* Global Add Trade Modal */}
+      <AddTradeSlideOver isOpen={isAddTradeOpen} onClose={() => setIsAddTradeOpen(false)} />
     </div>
   )
 }

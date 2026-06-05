@@ -1,4 +1,7 @@
+"use client"
+import { useState } from "react"
 import { ScrollText } from "lucide-react"
+import SetupPreviewModal from "./SetupPreviewModal"
 
 export default function TradesTable() {
   const recentTrades = [
@@ -67,6 +70,8 @@ export default function TradesTable() {
     }
   ]
 
+  const [selectedTrade, setSelectedTrade] = useState<any>(null)
+
   return (
     <div className="bg-white rounded-[1.5rem] p-6 flex flex-col h-full shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
       <div className="flex items-center justify-between mb-6">
@@ -92,7 +97,11 @@ export default function TradesTable() {
             {recentTrades.map((trade) => {
               const isWin = trade.outcome === "WIN"
               return (
-                <tr key={trade.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group">
+                <tr 
+                  key={trade.id} 
+                  onClick={() => setSelectedTrade(trade)}
+                  className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group cursor-pointer"
+                >
                   <td className="py-3 pl-2 align-middle">
                     <div className="font-bold text-slate-800">{trade.asset}</div>
                     <div className="text-[11px] text-slate-500 font-medium mt-0.5">{trade.time} {trade.tf}</div>
@@ -122,6 +131,12 @@ export default function TradesTable() {
           </tbody>
         </table>
       </div>
+
+      <SetupPreviewModal 
+        isOpen={!!selectedTrade} 
+        onClose={() => setSelectedTrade(null)} 
+        trade={selectedTrade} 
+      />
     </div>
   )
 }

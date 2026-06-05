@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react"
 import { Target, CheckSquare, Square, Lock, CloudUpload, Trophy } from "lucide-react"
 
-export default function SniperEntryForm() {
+export default function SniperEntryForm({ className = "" }: { className?: string }) {
   const [direction, setDirection] = useState("BUY")
   const [risk, setRisk] = useState("0.5")
   const [tags, setTags] = useState({
@@ -16,7 +16,8 @@ export default function SniperEntryForm() {
   })
   const [checklist, setChecklist] = useState({
     candleClosed: true,
-    solidBody: true
+    solidBody: true,
+    premiumDiscount: true
   })
 
   // Auto Tier Logic
@@ -35,7 +36,7 @@ export default function SniperEntryForm() {
   const toggleChecklist = (key: keyof typeof checklist) => setChecklist(prev => ({ ...prev, [key]: !prev[key] }));
 
   return (
-    <div className="bg-white rounded-[1.5rem] p-6 h-full flex flex-col shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
+    <div className={`bg-white rounded-[1.5rem] p-6 h-full flex flex-col shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 ${className}`}>
       <div className="flex items-center gap-2 mb-6">
         <Target className="size-5 text-sky-500" strokeWidth={2.5} />
         <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">LOG NEW SNIPER ENTRY</h2>
@@ -160,6 +161,12 @@ export default function SniperEntryForm() {
                 {checklist.solidBody ? <CheckSquare className="size-4 text-sky-500" /> : <Square className="size-4 text-slate-300 group-hover:text-slate-400" />}
               </div>
               <span className="text-xs text-slate-700 font-medium leading-relaxed">Solid body close (No ambiguity)?</span>
+            </label>
+            <label className="flex items-start gap-2 cursor-pointer group" onClick={() => toggleChecklist("premiumDiscount")}>
+              <div className="mt-0.5">
+                {checklist.premiumDiscount ? <CheckSquare className="size-4 text-sky-500" /> : <Square className="size-4 text-slate-300 group-hover:text-slate-400" />}
+              </div>
+              <span className="text-xs text-slate-700 font-medium leading-relaxed">Entry is in the correct Premium / Discount zone?</span>
             </label>
           </div>
         </div>
