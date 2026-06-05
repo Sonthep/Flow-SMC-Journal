@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Session {
+  ASIA
+  LONDON
+  NY
+}
+
+enum Direction {
+  BUY
+  SELL
+}
+
+enum Outcome {
+  WIN
+  LOSS
+  PARTIAL_WIN
+  BE
+}
+
+enum SweepType {
+  EXTERNAL_MAJOR
+  EXTERNAL_MINOR
+  INTERNAL
+  ASIA_HL
+}
+
+enum EntryZone {
+  ORDER_BLOCK
+  FVG
+  BREAKER
+  FLIP
+}
+
+enum ValueZone {
+  PREMIUM
+  DISCOUNT
+  EQUILIBRIUM
+}
+
+enum Emotion {
+  CALM
+  FOMO
+  BORED
+  PANIC
+  PATIENT
+}
+
+enum ExitReason {
+  HIT_TP
+  HIT_SL
+  MANUAL_PANIC
+  PARTIAL_TP
+}
+
+model TradeLog {
+  id            String    @id @default(cuid())
+  createdAt     DateTime  @default(now())
+  
+  // Metadata
+  pair          String    @default("XAUUSD")
+  session       Session
+  direction     Direction
+  riskPercent   Float
+  
+  // Execution Numbers
+  entryPrice    Float
+  stopLoss      Float
+  takeProfit    Float
+  realizedRR    Float?
+  outcome       Outcome
+  
+  // SMC Strategy Constraints
+  sweepType     SweepType
+  hasChoch      Boolean
+  entryZone     EntryZone
+  valueZone     ValueZone
+  
+  // Imagery
+  contextImgUrl String?
+  entryImgUrl   String?
+  
+  // Psychological Factors
+  preEmotion    Emotion
+  duringEmotion Emotion
+  exitReason    ExitReason
+  journalNote   String?
+}
