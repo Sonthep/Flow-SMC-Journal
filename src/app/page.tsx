@@ -1,8 +1,5 @@
 import Header from "@/components/Header"
-import MetricsGrid from "@/components/MetricsGrid"
-import EquityCurveChart from "@/components/EquityCurveChart"
-import WinLossPieChart from "@/components/WinLossPieChart"
-import TradesTable from "@/components/TradesTable"
+import DashboardClient from "@/components/DashboardClient"
 
 export default function Home() {
   return (
@@ -16,36 +13,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Top Metrics Row */}
-        <div className="mb-6">
-          <MetricsGrid />
-        </div>
-        
-        {/* Visual Analytics Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          {/* Equity Curve */}
-          <div className="lg:col-span-2">
-            <EquityCurveChart />
-          </div>
-          
-          {/* Pie Chart */}
-          <div className="lg:col-span-1">
-            <WinLossPieChart />
-          </div>
-        </div>
-
-        {/* Recent Trades Table */}
-        <div className="bg-white rounded-[1.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden mb-10">
-          <div className="p-6 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Recent Executions</h2>
-            <button className="text-xs font-bold text-sky-500 hover:text-sky-600 uppercase tracking-wider transition-colors">
-              View All
-            </button>
-          </div>
-          <div className="p-6">
-            <TradesTable />
-          </div>
-        </div>
+        <DashboardClient />
 
       </main>
     </>

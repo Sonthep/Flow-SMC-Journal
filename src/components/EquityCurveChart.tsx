@@ -1,30 +1,22 @@
 "use client"
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
-const data = [
-  { name: 'Week 1', balance: 10000 },
-  { name: 'Week 2', balance: 10150 },
-  { name: 'Week 3', balance: 9900 },
-  { name: 'Week 4', balance: 10400 },
-  { name: 'Week 5', balance: 10300 },
-  { name: 'Week 6', balance: 10800 },
-  { name: 'Week 7', balance: 11200 },
-  { name: 'Week 8', balance: 11050 },
-  { name: 'Week 9', balance: 11500 },
-  { name: 'Week 10', balance: 11840 },
-]
+interface Props {
+  data: { name: string; balance: number }[]
+  currentBalance: number
+}
 
-export default function EquityCurveChart() {
+export default function EquityCurveChart({ data, currentBalance }: Props) {
   return (
     <div className="bg-white rounded-[1.5rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex flex-col h-[400px]">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Equity Curve</h2>
-          <p className="text-xs text-slate-500 font-medium mt-1">Last 10 Weeks</p>
+          <p className="text-xs text-slate-500 font-medium mt-1">{data.length} Trades</p>
         </div>
         <div className="text-right">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Current Balance</p>
-          <p className="text-xl font-bold text-slate-800">$11,840.00</p>
+          <p className="text-xl font-bold text-slate-800">${currentBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
         </div>
       </div>
       

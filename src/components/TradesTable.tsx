@@ -3,32 +3,14 @@ import { useState, useEffect } from "react"
 import { ScrollText, Loader2 } from "lucide-react"
 import SetupPreviewModal from "./SetupPreviewModal"
 
-export default function TradesTable() {
-  const [recentTrades, setRecentTrades] = useState<any[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+interface Props {
+  recentTrades: any[]
+  isLoading: boolean
+  onRefresh: () => void
+}
+
+export default function TradesTable({ recentTrades, isLoading, onRefresh }: Props) {
   const [selectedTrade, setSelectedTrade] = useState<any>(null)
-
-  const fetchTrades = async () => {
-    try {
-      const res = await fetch('/api/trades');
-      const data = await res.json();
-      if (data.success) {
-        setRecentTrades(data.trades);
-      }
-    } catch (err) {
-      console.error("Error fetching trades:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    fetchTrades();
-    
-    // Simple polling every 10 seconds to keep dashboard fresh
-    const interval = setInterval(fetchTrades, 10000);
-    return () => clearInterval(interval);
-  }, [])
 
   return (
     <div className="bg-white rounded-[1.5rem] p-6 flex flex-col h-full shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
@@ -134,7 +116,7 @@ export default function TradesTable() {
         onClose={() => setSelectedTrade(null)} 
         onUpdate={() => {
           setSelectedTrade(null)
-          fetchTrades()
+          onRefresh()
         }}
         trade={selectedTrade} 
       />

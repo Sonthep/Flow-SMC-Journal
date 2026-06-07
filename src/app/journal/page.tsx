@@ -1,75 +1,138 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useMemo } from "react"
 import Header from "@/components/Header"
-import { Search, Filter, Download, ChevronLeft, ChevronRight, Calendar as CalendarIcon, List, X, LayoutGrid } from "lucide-react"
+import { Search, Filter, Download, ChevronLeft, ChevronRight, Calendar as CalendarIcon, List, X, Loader2 } from "lucide-react"
 import SetupPreviewModal from "@/components/SetupPreviewModal"
 
 export default function JournalPage() {
   const [viewMode, setViewMode] = useState<"list" | "calendar">("calendar")
-  const [selectedDay, setSelectedDay] = useState<number | null>(null)
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [selectedTrade, setSelectedTrade] = useState<any>(null)
+  
+  const [trades, setTrades] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  
+  // Start with current month
+  const [currentMonth, setCurrentMonth] = useState(new Date())
 
-  // List View Trades Data
-  const trades = [
-    { id: "TRD-1102", date: "2026-06-05", pair: "EUR/USD", dir: "SELL", entry: "1.08450", exit: "1.08200", rr: "+2.5R", outcome: "WIN", tags: ["SMC Expansion", "London Open"] },
-    { id: "TRD-1101", date: "2026-06-04", pair: "XAU/USD", dir: "BUY", entry: "2024.10", exit: "2022.00", rr: "-1.0R", outcome: "LOSS", tags: ["Liquidity Sweep", "NY Session"] },
-    { id: "TRD-1100", date: "2026-06-04", pair: "GBP/USD", dir: "BUY", entry: "1.26400", exit: "1.26900", rr: "+4.1R", outcome: "WIN", tags: ["SMC Expansion", "Order Block"] },
-    { id: "TRD-1099", date: "2026-06-03", pair: "USD/JPY", dir: "SELL", entry: "148.500", exit: "148.500", rr: "0.0R", outcome: "BE", tags: ["Order Block", "Asia High"] },
-    { id: "TRD-1098", date: "2026-06-02", pair: "EUR/USD", dir: "BUY", entry: "1.07900", exit: "1.08250", rr: "+3.2R", outcome: "WIN", tags: ["FVG", "London Open"] },
-  ]
+  const fetchTrades = async () => {
+    try {
+      const res = await fetch('/api/trades')
+      const data = await res.json()
+      if (data.success) {
+        setTrades(data.trades)
+      }
+    } catch (err) {
+      console.error("Error fetching trades:", err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
-  // Mock Calendar Data for June 2026 (starting Monday June 1)
-  // Format: [week1, week2, ...] where each week is an array of 7 days
-  const calendarData = [
-    [
-      { day: 1, netRR: -1.0, trades: 1, isCurrentMonth: true },
-      { day: 2, netRR: 3.2, trades: 1, isCurrentMonth: true },
-      { day: 3, netRR: 0.0, trades: 1, isCurrentMonth: true },
-      { day: 4, netRR: 3.1, trades: 2, isCurrentMonth: true },
-      { day: 5, netRR: 2.5, trades: 1, isCurrentMonth: true },
-      { day: 6, netRR: null, trades: 0, isCurrentMonth: true },
-      { day: 7, netRR: null, trades: 0, isCurrentMonth: true },
-    ],
-    [
-      { day: 8, netRR: 1.5, trades: 2, isCurrentMonth: true },
-      { day: 9, netRR: -2.0, trades: 3, isCurrentMonth: true },
-      { day: 10, netRR: 4.2, trades: 1, isCurrentMonth: true },
-      { day: 11, netRR: null, trades: 0, isCurrentMonth: true },
-      { day: 12, netRR: -0.5, trades: 1, isCurrentMonth: true },
-      { day: 13, netRR: null, trades: 0, isCurrentMonth: true },
-      { day: 14, netRR: null, trades: 0, isCurrentMonth: true },
-    ],
-    [
-      { day: 15, netRR: 5.0, trades: 2, isCurrentMonth: true },
-      { day: 16, netRR: -1.0, trades: 1, isCurrentMonth: true },
-      { day: 17, netRR: 2.1, trades: 1, isCurrentMonth: true },
-      { day: 18, netRR: 1.0, trades: 2, isCurrentMonth: true },
-      { day: 19, netRR: -1.5, trades: 2, isCurrentMonth: true },
-      { day: 20, netRR: null, trades: 0, isCurrentMonth: true },
-      { day: 21, netRR: null, trades: 0, isCurrentMonth: true },
-    ],
-    [
-      { day: 22, netRR: 0.0, trades: 1, isCurrentMonth: true },
-      { day: 23, netRR: 2.8, trades: 1, isCurrentMonth: true },
-      { day: 24, netRR: -2.0, trades: 2, isCurrentMonth: true },
-      { day: 25, netRR: 4.5, trades: 2, isCurrentMonth: true },
-      { day: 26, netRR: 1.2, trades: 1, isCurrentMonth: true },
-      { day: 27, netRR: null, trades: 0, isCurrentMonth: true },
-      { day: 28, netRR: null, trades: 0, isCurrentMonth: true },
-    ],
-    [
-      { day: 29, netRR: 3.0, trades: 1, isCurrentMonth: true },
-      { day: 30, netRR: -1.0, trades: 1, isCurrentMonth: true },
-      { day: 1, netRR: null, trades: 0, isCurrentMonth: false },
-      { day: 2, netRR: null, trades: 0, isCurrentMonth: false },
-      { day: 3, netRR: null, trades: 0, isCurrentMonth: false },
-      { day: 4, netRR: null, trades: 0, isCurrentMonth: false },
-      { day: 5, netRR: null, trades: 0, isCurrentMonth: false },
-    ],
-  ]
+  useEffect(() => {
+    fetchTrades()
+    const interval = setInterval(fetchTrades, 10000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Month Navigation
+  const prevMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))
+  }
+  const nextMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))
+  }
+  const monthName = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })
+
+  // Calculate Monthly Stats
+  const currentMonthTrades = useMemo(() => {
+    return trades.filter(t => {
+      const d = new Date(t.createdAt)
+      return d.getMonth() === currentMonth.getMonth() && d.getFullYear() === currentMonth.getFullYear()
+    })
+  }, [trades, currentMonth])
+
+  const { monthlyNetRR, monthlyWinRate } = useMemo(() => {
+    const finished = currentMonthTrades.filter(t => t.outcome === 'WIN' || t.outcome === 'LOSS' || t.outcome === 'BE' || t.outcome === 'PARTIAL_WIN')
+    let netRR = 0
+    let wins = 0
+    finished.forEach(t => {
+      if (t.realizedRR) netRR += t.realizedRR
+      if (t.outcome === 'WIN') wins++
+    })
+    return {
+      monthlyNetRR: netRR,
+      monthlyWinRate: finished.length > 0 ? (wins / finished.length) * 100 : 0
+    }
+  }, [currentMonthTrades])
+
+  // Calendar Logic (Monday Start)
+  const calendarData = useMemo(() => {
+    const year = currentMonth.getFullYear()
+    const month = currentMonth.getMonth()
+    
+    const firstDayOfMonth = new Date(year, month, 1)
+    const lastDayOfMonth = new Date(year, month + 1, 0)
+    
+    // JS getDay(): Sun=0, Mon=1...
+    let firstDayOfWeek = firstDayOfMonth.getDay()
+    if (firstDayOfWeek === 0) firstDayOfWeek = 7 // Make Sun=7
+    
+    const prevMonthDays = firstDayOfWeek - 1
+    
+    const calendar: any[][] = []
+    let currentWeek: any[] = []
+    
+    const prevMonthLastDate = new Date(year, month, 0).getDate()
+    for (let i = prevMonthDays - 1; i >= 0; i--) {
+      currentWeek.push({ day: prevMonthLastDate - i, netRR: null, trades: 0, isCurrentMonth: false, date: null })
+    }
+    
+    for (let i = 1; i <= lastDayOfMonth.getDate(); i++) {
+      const currentDateStr = new Date(year, month, i).toDateString()
+      const dayTrades = currentMonthTrades.filter(t => new Date(t.createdAt).toDateString() === currentDateStr)
+      
+      const finishedDayTrades = dayTrades.filter(t => t.outcome === 'WIN' || t.outcome === 'LOSS' || t.outcome === 'BE' || t.outcome === 'PARTIAL_WIN')
+      
+      let dayNetRR = null
+      if (finishedDayTrades.length > 0) {
+        dayNetRR = finishedDayTrades.reduce((acc, t) => acc + (t.realizedRR || 0), 0)
+      }
+      
+      currentWeek.push({
+        day: i,
+        netRR: dayNetRR,
+        trades: dayTrades.length,
+        isCurrentMonth: true,
+        date: new Date(year, month, i)
+      })
+      
+      if (currentWeek.length === 7) {
+        calendar.push(currentWeek)
+        currentWeek = []
+      }
+    }
+    
+    let nextMonthDay = 1
+    while (currentWeek.length < 7 && currentWeek.length > 0) {
+      currentWeek.push({ day: nextMonthDay++, netRR: null, trades: 0, isCurrentMonth: false, date: null })
+    }
+    if (currentWeek.length === 7) {
+      calendar.push(currentWeek)
+    }
+    
+    return calendar
+  }, [currentMonth, currentMonthTrades])
 
   const weekDays = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+
+  // Daily trades modal data
+  const selectedDayTrades = useMemo(() => {
+    if (!selectedDate) return []
+    const dateStr = selectedDate.toDateString()
+    return trades.filter(t => new Date(t.createdAt).toDateString() === dateStr)
+  }, [selectedDate, trades])
 
   return (
     <>
@@ -79,7 +142,6 @@ export default function JournalPage() {
           <h2 className="text-2xl font-bold text-slate-800">Trading Journal</h2>
           
           <div className="flex items-center gap-3">
-            {/* View Toggles */}
             <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
               <button 
                 onClick={() => setViewMode("calendar")}
@@ -111,29 +173,37 @@ export default function JournalPage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
                 <input type="text" placeholder="Search pairs, tags..." className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-sky-500" />
               </div>
-              <div className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2 cursor-pointer hover:border-sky-500 transition-colors w-48">
-                <ChevronLeft className="size-4 text-slate-400 hover:text-slate-600" />
-                <span className="text-sm font-bold text-slate-700">June 2026</span>
-                <ChevronRight className="size-4 text-slate-400 hover:text-slate-600" />
+              <div className="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-3 py-2">
+                <button onClick={prevMonth} className="p-1 hover:bg-slate-100 rounded-full transition-colors cursor-pointer">
+                  <ChevronLeft className="size-4 text-slate-500" />
+                </button>
+                <span className="text-sm font-bold text-slate-700 w-32 text-center">{monthName}</span>
+                <button onClick={nextMonth} className="p-1 hover:bg-slate-100 rounded-full transition-colors cursor-pointer">
+                  <ChevronRight className="size-4 text-slate-500" />
+                </button>
               </div>
             </div>
             
-            {viewMode === "calendar" && (
-              <div className="flex items-center gap-4">
-                <div className="text-right">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Net Monthly R:R</p>
-                  <p className="text-sm font-bold text-emerald-500">+18.4R</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Win Rate</p>
-                  <p className="text-sm font-bold text-slate-700">62.5%</p>
-                </div>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Net Monthly R:R</p>
+                <p className={`text-sm font-bold ${monthlyNetRR > 0 ? 'text-emerald-500' : monthlyNetRR < 0 ? 'text-rose-500' : 'text-slate-500'}`}>
+                  {monthlyNetRR > 0 ? '+' : ''}{monthlyNetRR.toFixed(2)}R
+                </p>
               </div>
-            )}
+              <div className="text-right">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Win Rate</p>
+                <p className="text-sm font-bold text-slate-700">{monthlyWinRate.toFixed(1)}%</p>
+              </div>
+            </div>
           </div>
 
-          {/* Calendar View */}
-          {viewMode === "calendar" && (
+          {/* Body */}
+          {isLoading ? (
+            <div className="flex-1 flex items-center justify-center">
+              <Loader2 className="animate-spin text-slate-300 size-8" />
+            </div>
+          ) : viewMode === "calendar" ? (
             <div className="flex-1 flex flex-col p-6 bg-slate-50/50 overflow-auto">
               <div className="grid grid-cols-7 gap-4 mb-4">
                 {weekDays.map(day => (
@@ -143,23 +213,23 @@ export default function JournalPage() {
                 ))}
               </div>
               
-              <div className="flex-1 grid grid-rows-5 gap-4 min-h-[600px]">
+              <div className="flex-1 grid gap-4 min-h-[600px]" style={{ gridTemplateRows: `repeat(${calendarData.length}, 1fr)` }}>
                 {calendarData.map((week, wIndex) => (
                   <div key={wIndex} className="grid grid-cols-7 gap-4">
                     {week.map((dayData, dIndex) => {
                       const isWin = dayData.netRR !== null && dayData.netRR > 0;
                       const isLoss = dayData.netRR !== null && dayData.netRR < 0;
-                      const isBE = dayData.netRR === 0;
                       
                       return (
                         <div 
                           key={dIndex} 
-                          onClick={() => dayData.trades > 0 && setSelectedDay(dayData.day)}
+                          onClick={() => dayData.trades > 0 && setSelectedDate(dayData.date)}
                           className={`
-                            relative rounded-2xl p-4 flex flex-col transition-all cursor-pointer min-h-[110px]
+                            relative rounded-2xl p-4 flex flex-col transition-all min-h-[110px]
                             ${!dayData.isCurrentMonth ? 'opacity-30 bg-transparent border-transparent' : 'bg-white shadow-sm border border-slate-100 hover:shadow-md hover:border-sky-200 hover:-translate-y-0.5'}
                             ${isWin ? 'bg-gradient-to-br from-white to-emerald-50/30' : ''}
                             ${isLoss ? 'bg-gradient-to-br from-white to-rose-50/30' : ''}
+                            ${dayData.trades > 0 ? 'cursor-pointer' : ''}
                           `}
                         >
                           <span className={`text-sm font-bold ${dayData.isCurrentMonth ? 'text-slate-500' : 'text-slate-400'}`}>
@@ -169,7 +239,7 @@ export default function JournalPage() {
                           {dayData.trades > 0 && (
                             <div className="mt-auto flex flex-col items-center justify-center absolute inset-0 pt-4">
                               <div className={`text-xl font-bold tracking-tight ${isWin ? 'text-emerald-500' : isLoss ? 'text-rose-500' : 'text-slate-400'}`}>
-                                {dayData.netRR! > 0 ? '+' : ''}{dayData.netRR}R
+                                {dayData.netRR! > 0 ? '+' : ''}{dayData.netRR?.toFixed(1)}R
                               </div>
                               <div className="text-[10px] font-semibold text-slate-400 mt-1 uppercase tracking-wider">
                                 {dayData.trades} {dayData.trades === 1 ? 'Trade' : 'Trades'}
@@ -183,10 +253,7 @@ export default function JournalPage() {
                 ))}
               </div>
             </div>
-          )}
-
-          {/* List View Table */}
-          {viewMode === "list" && (
+          ) : (
             <div className="flex-1 overflow-auto">
               <table className="w-full text-left border-collapse min-w-[800px]">
                 <thead className="bg-white sticky top-0 z-10 shadow-sm">
@@ -199,29 +266,40 @@ export default function JournalPage() {
                   </tr>
                 </thead>
                 <tbody className="text-sm divide-y divide-slate-50">
-                  {trades.map(trade => {
+                  {currentMonthTrades.map(trade => {
                     const isWin = trade.outcome === "WIN";
                     const isLoss = trade.outcome === "LOSS";
                     
+                    const tags = []
+                    if (trade.hasChoch) tags.push("CHOCH")
+                    if (trade.entryZone === "FVG") tags.push("FVG")
+                    else tags.push("OB")
+                    if (trade.sweepType === "EXTERNAL_MAJOR") tags.push("EXT-SWEEP")
+                    else tags.push("INT-SWEEP")
+                    
+                    const date = new Date(trade.createdAt)
+                    const dateStr = date.toLocaleDateString()
+                    const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+
                     return (
                       <tr key={trade.id} className="hover:bg-slate-50/80 transition-colors group">
                         <td className="p-4 pl-6 align-middle">
-                          <div className="font-bold text-slate-700">{trade.id}</div>
-                          <div className="text-[11px] text-slate-400 font-medium mt-0.5">{trade.date}</div>
+                          <div className="font-bold text-slate-700">{trade.id.slice(0, 8).toUpperCase()}</div>
+                          <div className="text-[11px] text-slate-400 font-medium mt-0.5">{dateStr} • {timeStr}</div>
                         </td>
                         <td className="p-4 align-middle">
-                          <div className="font-bold text-slate-800">{trade.pair}</div>
-                          <div className={`text-[10px] uppercase font-bold tracking-wider mt-1 ${trade.dir === 'BUY' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                            {trade.dir}
+                          <div className="font-bold text-slate-800">{trade.pair || 'XAUUSD'}</div>
+                          <div className={`text-[10px] uppercase font-bold tracking-wider mt-1 ${trade.direction === 'BUY' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {trade.direction}
                           </div>
                         </td>
                         <td className="p-4 align-middle">
-                          <div className="text-slate-600 font-medium">{trade.entry}</div>
-                          <div className="text-slate-400 text-xs mt-0.5">&rarr; {trade.exit}</div>
+                          <div className="text-slate-600 font-medium">{trade.entryPrice}</div>
+                          <div className="text-slate-400 text-xs mt-0.5">&rarr; {trade.takeProfit}</div>
                         </td>
                         <td className="p-4 align-middle">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            {trade.tags.map(tag => (
+                            {tags.map(tag => (
                               <span key={tag} className="text-[10px] font-bold text-slate-500 tracking-wide border border-slate-200 px-1.5 py-0.5 rounded bg-white group-hover:bg-slate-50">
                                 {tag}
                               </span>
@@ -230,7 +308,7 @@ export default function JournalPage() {
                         </td>
                         <td className="p-4 pr-6 align-middle text-right">
                           <div className={`font-mono font-bold text-[15px] mb-1 ${isWin ? 'text-emerald-500' : isLoss ? 'text-rose-500' : 'text-slate-400'}`}>
-                            {trade.rr}
+                            {trade.realizedRR ? `${trade.realizedRR > 0 ? '+' : ''}${trade.realizedRR}R` : '---'}
                           </div>
                           <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
                             isWin ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 
@@ -243,16 +321,15 @@ export default function JournalPage() {
                       </tr>
                     )
                   })}
+                  {currentMonthTrades.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="py-12 text-center text-slate-400 font-medium">
+                        No trades found for this month.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
-              <div className="p-4 border-t border-slate-100 flex items-center justify-between bg-white">
-                <button className="flex items-center gap-1 text-slate-400 hover:text-slate-800 font-semibold text-sm transition-colors">
-                  <ChevronLeft className="size-4" /> Previous
-                </button>
-                <button className="flex items-center gap-1 text-slate-400 hover:text-slate-800 font-semibold text-sm transition-colors">
-                  Next <ChevronRight className="size-4" />
-                </button>
-              </div>
             </div>
           )}
 
@@ -260,70 +337,89 @@ export default function JournalPage() {
       </main>
 
       {/* Daily Trades Modal */}
-      {selectedDay && (
-        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setSelectedDay(null)}>
+      {selectedDate && (
+        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setSelectedDate(null)}>
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl overflow-hidden flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-3">
                 <div className="bg-sky-100 text-sky-600 w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg">
-                  {selectedDay}
+                  {selectedDate.getDate()}
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-800 text-lg leading-tight">Daily Execution Log</h3>
-                  <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider">June {selectedDay}, 2026</p>
+                  <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider">
+                    {selectedDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                  </p>
                 </div>
               </div>
-              <button onClick={() => setSelectedDay(null)} className="p-2 text-slate-400 hover:text-slate-700 bg-white rounded-full shadow-sm border border-slate-200 transition-colors">
+              <button onClick={() => setSelectedDate(null)} className="p-2 text-slate-400 hover:text-slate-700 bg-white rounded-full shadow-sm border border-slate-200 transition-colors">
                 <X className="size-4" />
               </button>
             </div>
             <div className="overflow-auto p-6 bg-slate-50">
-              {trades.filter(t => parseInt(t.date.split('-')[2]) === selectedDay).length === 0 ? (
+              {selectedDayTrades.length === 0 ? (
                 <div className="flex items-center justify-center p-12 text-slate-400 font-medium">
-                  No trade details available for this mockup day. Try clicking on days 2, 3, 4, or 5.
+                  No trades recorded for this day.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-                  {trades.filter(t => parseInt(t.date.split('-')[2]) === selectedDay).map(trade => {
+                  {selectedDayTrades.map(trade => {
                     const isWin = trade.outcome === "WIN";
                     const isLoss = trade.outcome === "LOSS";
-                    const isBuy = trade.dir === "BUY";
+                    const isBuy = trade.direction === "BUY";
+                    
+                    const tags = []
+                    if (trade.hasChoch) tags.push("CHOCH")
+                    if (trade.entryZone === "FVG") tags.push("FVG")
+                    else tags.push("OB")
+                    if (trade.sweepType === "EXTERNAL_MAJOR") tags.push("EXT-SWEEP")
+                    else tags.push("INT-SWEEP")
+                    
+                    const timeStr = new Date(trade.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
                     
                     return (
                       <div 
                         key={trade.id} 
-                        onClick={() => setSelectedTrade({
-                          id: trade.id,
-                          asset: trade.pair,
-                          dir: trade.dir,
-                          outcome: trade.outcome,
-                          rr: trade.rr,
-                          entry: trade.entry,
-                          sl: "1.08300", // mock
-                          tp: trade.exit,
-                          tags: trade.tags,
-                          time: "09:30",
-                          tf: "M5"
-                        })}
+                        onClick={() => {
+                          setSelectedTrade({
+                            id: trade.id,
+                            asset: trade.pair || 'XAUUSD',
+                            dir: trade.direction,
+                            outcome: trade.outcome,
+                            rr: trade.realizedRR ? `${trade.realizedRR > 0 ? '+' : ''}${trade.realizedRR}R` : '---',
+                            entry: trade.entryPrice,
+                            sl: trade.stopLoss,
+                            tp: trade.takeProfit,
+                            tags: tags,
+                            time: timeStr,
+                            tf: trade.timeframe || "M5",
+                            imageUrl: trade.contextImgUrl
+                          })
+                        }}
                         className="border border-slate-200 rounded-xl overflow-hidden hover:shadow-lg transition-all bg-white flex flex-col cursor-pointer group"
                       >
-                        <div className="h-[140px] bg-slate-100 w-full relative overflow-hidden border-b border-slate-100">
-                          {/* Mock Chart Image */}
-                          <img 
-                            src="https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=600&auto=format&fit=crop" 
-                            alt="Chart" 
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 grayscale-[20%]" 
-                          />
+                        <div className="h-[140px] bg-slate-100 w-full relative overflow-hidden border-b border-slate-100 flex items-center justify-center">
+                          {trade.contextImgUrl ? (
+                            <img 
+                              src={trade.contextImgUrl} 
+                              alt="Chart" 
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                            />
+                          ) : (
+                            <div className="text-slate-300 text-xs font-bold uppercase tracking-wider">No Image</div>
+                          )}
                           <div className="absolute top-2 right-2 bg-slate-900/80 backdrop-blur-sm text-white text-[9px] font-bold px-2 py-1 rounded">
-                            {trade.pair}
+                            {trade.pair || 'XAUUSD'}
                           </div>
-                          <div className={`absolute bottom-2 right-2 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm backdrop-blur-sm ${isWin ? 'bg-emerald-500/90' : isLoss ? 'bg-rose-500/90' : 'bg-slate-500/90'}`}>
-                            {trade.rr}
-                          </div>
+                          {trade.realizedRR !== null && (
+                            <div className={`absolute bottom-2 right-2 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm backdrop-blur-sm ${isWin ? 'bg-emerald-500/90' : isLoss ? 'bg-rose-500/90' : 'bg-slate-500/90'}`}>
+                              {trade.realizedRR > 0 ? '+' : ''}{trade.realizedRR}R
+                            </div>
+                          )}
                         </div>
                         <div className="p-4 flex flex-col gap-3 flex-1">
                           <div className="text-[11px] text-slate-500 font-medium">
-                            {trade.date} • 09:30 AM
+                            {timeStr} • {trade.session || 'LONDON'}
                           </div>
                           <div className="flex flex-wrap gap-1.5">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${isWin ? 'bg-emerald-100 text-emerald-700' : isLoss ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'}`}>
@@ -333,25 +429,13 @@ export default function JournalPage() {
                               {isBuy ? 'Bullish' : 'Bearish'}
                             </span>
                             <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-wider">
-                              M5
+                              {trade.timeframe || 'M5'}
                             </span>
-                            {trade.tags.map(tag => (
-                              <span key={tag} className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-wider truncate max-w-[120px]">
-                                {tag}
-                              </span>
-                            ))}
                           </div>
                         </div>
                       </div>
                     )
                   })}
-                  
-                  {/* New Page Card */}
-                  <div className="border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center h-full min-h-[200px] hover:bg-white hover:border-sky-300 hover:shadow-md transition-all cursor-pointer text-slate-400 hover:text-sky-500 group">
-                    <div className="flex items-center gap-2 font-bold text-sm">
-                      <span className="text-xl">+</span> New page
-                    </div>
-                  </div>
                 </div>
               )}
             </div>
