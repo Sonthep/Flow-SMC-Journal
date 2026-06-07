@@ -230,9 +230,337 @@ registerIndicator({
   }
 })
 
+// Module-level cache for SMC data
+let globalSMCData: any = { fvgs: [], obs: [] }
+
+const positionOverlay = (name: string) => ({
+  name,
+  totalStep: 4,
+  needDefaultPointFigure: true,
+  needDefaultXAxisFigure: true,
+  needDefaultYAxisFigure: true,
+  createPointFigures: ({ coordinates }: any) => {
+    if (coordinates.length === 0) return []
+    
+    const entry = coordinates[0]
+    const tp = coordinates[1] || { x: entry.x, y: entry.y }
+    
+    const sl = coordinates[2] || {
+      x: tp.x,
+      y: entry.y - (tp.y - entry.y)
+    }
+
+    const minX = Math.min(entry.x, tp.x, sl.x)
+    const maxX = Math.max(entry.x, tp.x, sl.x)
+
+    const profitColor = 'rgba(34, 197, 94, 0.2)'
+    const profitBorder = 'rgba(34, 197, 94, 0.8)'
+    const lossColor = 'rgba(239, 68, 68, 0.2)'
+    const lossBorder = 'rgba(239, 68, 68, 0.8)'
+
+    const figures: any[] = []
+    
+    // Profit Box
+    figures.push({
+      type: 'polygon',
+      attrs: {
+        coordinates: [
+          { x: minX, y: entry.y },
+          { x: maxX, y: entry.y },
+          { x: maxX, y: tp.y },
+          { x: minX, y: tp.y }
+        ]
+      },
+      styles: { style: 'stroke_fill', color: profitColor, borderColor: profitBorder, borderSize: 1 }
+    })
+
+    // Loss Box
+    figures.push({
+      type: 'polygon',
+      attrs: {
+        coordinates: [
+          { x: minX, y: entry.y },
+          { x: maxX, y: entry.y },
+          { x: maxX, y: sl.y },
+          { x: minX, y: sl.y }
+        ]
+      },
+      styles: { style: 'stroke_fill', color: lossColor, borderColor: lossBorder, borderSize: 1 }
+    })
+
+    // RR Text
+    if (coordinates.length >= 2) {
+      const risk = Math.abs(entry.y - sl.y)
+      const reward = Math.abs(tp.y - entry.y)
+      const rr = risk > 0 ? (reward / risk).toFixed(2) : '∞'
+
+      figures.push({
+        type: 'text',
+        attrs: {
+          x: minX + (maxX - minX) / 2,
+          y: entry.y,
+          text: `Risk/Reward: ${rr}`,
+          align: 'center',
+          baseline: 'middle'
+        },
+        styles: { color: '#fff', size: 12, backgroundColor: 'rgba(0,0,0,0.6)', paddingLeft: 4, paddingRight: 4, paddingTop: 2, paddingBottom: 2 }
+      })
+    }
+
+    return figures
+  }
+})
+
+registerOverlay(positionOverlay('longPosition'))
+registerOverlay(positionOverlay('shortPosition'))
+
+// Register custom Smart Money Concepts Indicator
+registerIndicator({
+  name: 'SMC_Concepts',
+  shortName: 'SMC',
+  calc: (dataList) => {
+    const fvgs: any[] = []
+    const obs: any[] = []
+
+    // Market Structure
+    const swings: any[] = []
+    const breakouts: any[] = []
+    const swingLength = 5
+    let lastConfHigh: any = null
+    let lastConfLow: any = null
+    let currentTrend = 0
+
+    for (let i = 2; i < dataList.length; i++) {
+      const c1 = dataList[i - 2]
+      const c2 = dataList[i - 1]
+      const c3 = dataList[i]
+
+      // Bullish FVG
+      if (c1.high < c3.low && c2.close > c2.open) {
+        fvgs.push({
+          type: 'bull',
+          startIndex: i - 2,
+          endIndex: i,
+          top: c3.low,
+          bottom: c1.high,
+          active: true,
+          color: 'rgba(34,197,94,0.15)', // Light green
+          borderColor: 'rgba(34,197,94,0.4)'
+        })
+        
+        // Basic Bullish OB: Lowest down candle before this FVG (lookback 10)
+        let obCandleIdx = -1
+        let minLow = Infinity
+        for (let j = i - 2; j >= Math.max(0, i - 10); j--) {
+          if (dataList[j].close < dataList[j].open && dataList[j].low < minLow) {
+            minLow = dataList[j].low
+            obCandleIdx = j
+          }
+        }
+        if (obCandleIdx !== -1) {
+          const obCandle = dataList[obCandleIdx]
+          obs.push({
+            type: 'bull',
+            startIndex: obCandleIdx,
+            endIndex: i,
+            top: obCandle.high,
+            bottom: obCandle.low,
+            active: true,
+            color: 'rgba(34,197,94,0.1)',
+            borderColor: 'rgba(34,197,94,0.6)'
+          })
+        }
+      }
+
+      // Bearish FVG
+      if (c1.low > c3.high && c2.close < c2.open) {
+        fvgs.push({
+          type: 'bear',
+          startIndex: i - 2,
+          endIndex: i,
+          top: c1.low,
+          bottom: c3.high,
+          active: true,
+          color: 'rgba(239,68,68,0.15)', // Light red
+          borderColor: 'rgba(239,68,68,0.4)'
+        })
+        
+        // Basic Bearish OB: Highest up candle before this FVG
+        let obCandleIdx = -1
+        let maxHigh = -Infinity
+        for (let j = i - 2; j >= Math.max(0, i - 10); j--) {
+          if (dataList[j].close > dataList[j].open && dataList[j].high > maxHigh) {
+            maxHigh = dataList[j].high
+            obCandleIdx = j
+          }
+        }
+        if (obCandleIdx !== -1) {
+          const obCandle = dataList[obCandleIdx]
+          obs.push({
+            type: 'bear',
+            startIndex: obCandleIdx,
+            endIndex: i,
+            top: obCandle.high,
+            bottom: obCandle.low,
+            active: true,
+            color: 'rgba(239,68,68,0.1)',
+            borderColor: 'rgba(239,68,68,0.6)'
+          })
+        }
+      }
+
+      // Mitigation check
+      for (const fvg of fvgs) {
+        if (fvg.active) {
+          fvg.endIndex = i
+          if ((fvg.type === 'bull' && c3.low <= fvg.bottom) || (fvg.type === 'bear' && c3.high >= fvg.top)) {
+            fvg.active = false
+          }
+        }
+      }
+      for (const ob of obs) {
+        if (ob.active) {
+          ob.endIndex = i
+          if ((ob.type === 'bull' && c3.low <= ob.bottom) || (ob.type === 'bear' && c3.high >= ob.top)) {
+            ob.active = false
+          }
+        }
+      }
+
+      // Market Structure Logic (Swings & Breakouts)
+      const checkIdx = i - swingLength
+      if (checkIdx >= 0 && checkIdx + swingLength < dataList.length) {
+        let isHigh = true
+        let isLow = true
+        for (let j = 1; j <= swingLength; j++) {
+          if (dataList[checkIdx].high <= dataList[checkIdx - j]?.high || dataList[checkIdx].high <= dataList[checkIdx + j]?.high) isHigh = false
+          if (dataList[checkIdx].low >= dataList[checkIdx - j]?.low || dataList[checkIdx].low >= dataList[checkIdx + j]?.low) isLow = false
+        }
+        
+        if (isHigh) {
+          let type = 'HH'
+          if (lastConfHigh && dataList[checkIdx].high < lastConfHigh.price) type = 'LH'
+          const swing = { index: checkIdx, price: dataList[checkIdx].high, type, isHigh: true, broken: false }
+          swings.push(swing)
+          lastConfHigh = swing
+        }
+        if (isLow) {
+          let type = 'HL'
+          if (lastConfLow && dataList[checkIdx].low < lastConfLow.price) type = 'LL'
+          const swing = { index: checkIdx, price: dataList[checkIdx].low, type, isHigh: false, broken: false }
+          swings.push(swing)
+          lastConfLow = swing
+        }
+      }
+
+      // Check breakouts at current candle against confirmed swings
+      if (lastConfHigh && !lastConfHigh.broken && dataList[i].close > lastConfHigh.price) {
+        lastConfHigh.broken = true
+        let type = currentTrend === 1 ? 'BOS' : 'CHOCH'
+        currentTrend = 1
+        breakouts.push({
+          startIndex: lastConfHigh.index,
+          endIndex: i,
+          price: lastConfHigh.price,
+          type: type,
+          isBullish: true
+        })
+      }
+
+      if (lastConfLow && !lastConfLow.broken && dataList[i].close < lastConfLow.price) {
+        lastConfLow.broken = true
+        let type = currentTrend === -1 ? 'BOS' : 'CHOCH'
+        currentTrend = -1
+        breakouts.push({
+          startIndex: lastConfLow.index,
+          endIndex: i,
+          price: lastConfLow.price,
+          type: type,
+          isBullish: false
+        })
+      }
+    }
+    
+    globalSMCData = { fvgs, obs, swings, breakouts }
+    return dataList.map(() => ({} as any))
+  },
+  draw: ({ ctx, barSpace, visibleRange, xAxis, yAxis }) => {
+    const { fvgs, obs, swings, breakouts } = globalSMCData
+
+    const drawZone = (zone: any, label: string) => {
+      // Draw if the zone overlaps the visible range
+      if (zone.endIndex >= visibleRange.from && zone.startIndex <= visibleRange.to) {
+        const startX = xAxis.convertToPixel(zone.startIndex) - barSpace.halfBar
+        const endX = xAxis.convertToPixel(zone.endIndex) + barSpace.halfBar
+        const topY = yAxis.convertToPixel(zone.top)
+        const bottomY = yAxis.convertToPixel(zone.bottom)
+
+        ctx.fillStyle = zone.color
+        ctx.fillRect(startX, topY, endX - startX, bottomY - topY)
+        
+        ctx.strokeStyle = zone.borderColor
+        ctx.lineWidth = 1
+        ctx.strokeRect(startX, topY, endX - startX, bottomY - topY)
+
+        ctx.fillStyle = zone.borderColor
+        ctx.font = "bold 10px sans-serif"
+        ctx.textAlign = "left"
+        
+        // To avoid text drawing outside box visually if box is thin, we just place it inside
+        ctx.fillText(label, startX + 4, topY + 12)
+      }
+    }
+
+    // Draw Market Structure
+    if (swings) {
+      swings.forEach((s: any) => {
+        if (s.index >= visibleRange.from && s.index <= visibleRange.to) {
+          const x = xAxis.convertToPixel(s.index)
+          const padding = 10
+          const y = yAxis.convertToPixel(s.price) + (s.isHigh ? -padding : padding + 4)
+
+          ctx.fillStyle = s.isHigh ? 'rgba(239,68,68,0.8)' : 'rgba(34,197,94,0.8)' // Red for Highs, Green for Lows
+          ctx.font = "bold 10px sans-serif"
+          ctx.textAlign = "center"
+          ctx.fillText(s.type, x, y)
+        }
+      })
+    }
+
+    if (breakouts) {
+      breakouts.forEach((b: any) => {
+        if (b.endIndex >= visibleRange.from && b.startIndex <= visibleRange.to) {
+          const startX = xAxis.convertToPixel(b.startIndex)
+          const endX = xAxis.convertToPixel(b.endIndex)
+          const y = yAxis.convertToPixel(b.price)
+
+          ctx.strokeStyle = b.isBullish ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)'
+          ctx.lineWidth = 1
+          ctx.setLineDash([4, 4])
+          ctx.beginPath()
+          ctx.moveTo(startX, y)
+          ctx.lineTo(endX, y)
+          ctx.stroke()
+          ctx.setLineDash([])
+
+          ctx.fillStyle = b.isBullish ? 'rgba(34,197,94,0.9)' : 'rgba(239,68,68,0.9)'
+          ctx.font = "bold 10px sans-serif"
+          ctx.textAlign = "center"
+          ctx.fillText(b.type, startX + (endX - startX) / 2, y - 4)
+        }
+      })
+    }
+
+    obs.forEach((ob: any) => drawZone(ob, ob.type === 'bull' ? '+OB' : '-OB'))
+    fvgs.forEach((fvg: any) => drawZone(fvg, fvg.type === 'bull' ? '+FVG' : '-FVG'))
+
+    return false
+  }
+})
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 // Overlay names verified against klinecharts v9.8.12 getSupportedOverlays()
-type DrawTool = 'cursor' | 'segment' | 'straightLine' | 'rayLine' | 'horizontalStraightLine' | 'rect' | 'fibonacciLine' | 'customText'
+type DrawTool = 'cursor' | 'segment' | 'straightLine' | 'rayLine' | 'horizontalStraightLine' | 'rect' | 'fibonacciLine' | 'customText' | 'longPosition' | 'shortPosition'
 
 interface MAConfig { period: number; color: string; enabled: boolean }
 
@@ -271,6 +599,9 @@ export default function BacktestingPage() {
   // ICT Killzones
   const [showKillzones, setShowKillzones] = useState(false)
   const [kzOffset, setKzOffset] = useState(0)
+
+  // SMC
+  const [showSMC, setShowSMC] = useState(false)
 
   const [maConfigs, setMaConfigs] = useState<MAConfig[]>([
     { period: 9,  color: '#f59e0b', enabled: false },
@@ -376,6 +707,21 @@ export default function BacktestingPage() {
       )
     }
   }, [showKillzones, kzOffset, fullData])
+
+  // SMC Indicator
+  useEffect(() => {
+    if (!chartRef.current) return
+    
+    try { chartRef.current.removeIndicator('candle_pane', 'SMC_Concepts') } catch { /* ignore */ }
+    
+    if (showSMC && fullData.length > 0) {
+      chartRef.current.createIndicator(
+        { name: 'SMC_Concepts' },
+        true, 
+        { id: 'candle_pane' }
+      )
+    }
+  }, [showSMC, fullData])
 
   // ─── Update chart data ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -541,6 +887,8 @@ export default function BacktestingPage() {
     { tool: 'rect',                  icon: <Square className="size-4" />,       label: 'Rectangle / Box' },
     { tool: 'fibonacciLine',         icon: <BarChart2 className="size-4" />,    label: 'Fibonacci Retracement' },
     { tool: 'customText',            icon: <Type className="size-4" />,         label: 'Text' },
+    { tool: 'longPosition',          icon: <div className="text-[10px] font-bold border-b border-t border-slate-400 px-0.5" style={{lineHeight:'1'}}>L</div>, label: 'Long Position' },
+    { tool: 'shortPosition',         icon: <div className="text-[10px] font-bold border-b border-t border-slate-400 px-0.5" style={{lineHeight:'1'}}>S</div>, label: 'Short Position' },
   ]
 
   return (
@@ -701,6 +1049,18 @@ export default function BacktestingPage() {
                     ))}
                   </select>
                 )}
+
+                <div className={`w-px h-5 mx-2 ${isDark ? 'bg-white/10' : 'bg-slate-200'}`} />
+
+                <button 
+                  onClick={() => setShowSMC(p => !p)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    showSMC 
+                      ? 'bg-emerald-500 text-white shadow-sm' 
+                      : isDark ? 'text-white/50 hover:text-white hover:bg-white/10' : 'text-slate-500 hover:bg-slate-100'
+                  }`}>
+                  SMC Indicator
+                </button>
               </div>
 
               {/* MAs */}
