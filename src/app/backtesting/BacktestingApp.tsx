@@ -233,13 +233,17 @@ registerIndicator({
 // Module-level cache for SMC data
 let globalSMCData: any = { fvgs: [], obs: [] }
 
+// Module-level: stores the last yAxis-computed prices from createPointFigures
+// Used by onDrawEnd/onMoveEnd to get accurate visual prices (klinecharts may reset extendData)
+let lastPositionPrices = { overlayId: '', entryPrice: 0, tpPrice: 0, slPrice: 0 }
+
 const positionOverlay = (name: string) => ({
   name,
-  totalStep: 4,
+  totalStep: 4,   // Step 1=Entry, Step 2=TP, Step 3=SL, Step 4=finalize → 3 draggable dots
   needDefaultPointFigure: true,
   needDefaultXAxisFigure: true,
   needDefaultYAxisFigure: true,
-  createPointFigures: ({ coordinates }: any) => {
+  createPointFigures: ({ coordinates, overlay, yAxis, bounding }: any) => {
     if (coordinates.length === 0) return []
     
     const entry = coordinates[0]
@@ -252,6 +256,22 @@ const positionOverlay = (name: string) => ({
 
     const minX = Math.min(entry.x, tp.x, sl.x)
     const maxX = Math.max(entry.x, tp.x, sl.x)
+
+    // Convert pixel Y → price using yAxis, subtracting the pane top offset
+    // so the pixel is in pane-local coordinates (what convertFromPixel expects)
+    const paneTop = bounding?.top ?? 0
+    const toPrice = (y: number): number => yAxis?.convertFromPixel(y - paneTop) ?? 0
+
+    const entryPrice = toPrice(entry.y)
+    const tpPrice    = toPrice(tp.y)
+    const slPrice    = toPrice(sl.y)
+
+    // Store to module-level var so onDrawEnd / onMoveEnd can read correct prices
+    // (klinecharts may reset overlay.extendData before firing those callbacks)
+    if (overlay && yAxis) {
+      lastPositionPrices = { overlayId: overlay.id ?? '', entryPrice, tpPrice, slPrice }
+      overlay.extendData = { entryPrice, tpPrice, slPrice }  // backup in extendData too
+    }
 
     const profitColor = 'rgba(34, 197, 94, 0.2)'
     const profitBorder = 'rgba(34, 197, 94, 0.8)'
@@ -313,6 +333,79 @@ const positionOverlay = (name: string) => ({
 
 registerOverlay(positionOverlay('longPosition'))
 registerOverlay(positionOverlay('shortPosition'))
+
+registerOverlay({
+  name: 'premiumDiscount',
+  totalStep: 3,
+  needDefaultPointFigure: true,
+  needDefaultXAxisFigure: true,
+  needDefaultYAxisFigure: true,
+  createPointFigures: ({ coordinates, yAxis }: any) => {
+    if (coordinates.length < 2) return []
+
+    const p1 = coordinates[0]
+    const p2 = coordinates[1]
+
+    const minX = Math.min(p1.x, p2.x)
+    const maxX = Math.max(p1.x, p2.x)
+
+    const highY = Math.min(p1.y, p2.y)
+    const lowY = Math.max(p1.y, p2.y)
+    const midY = (highY + lowY) / 2
+
+    const highPrice = yAxis?.convertFromPixel(highY) ?? 0
+    const lowPrice = yAxis?.convertFromPixel(lowY) ?? 0
+    const midPrice = yAxis?.convertFromPixel(midY) ?? 0
+
+    const formatPrice = (p: number) => p.toFixed(3)
+
+    const premiumColor = 'rgba(239, 68, 68, 0.15)'
+    const discountColor = 'rgba(34, 197, 94, 0.15)'
+
+    const figures: any[] = []
+
+    figures.push({
+      type: 'polygon',
+      attrs: {
+        coordinates: [
+          { x: minX, y: highY }, { x: maxX, y: highY },
+          { x: maxX, y: midY }, { x: minX, y: midY }
+        ]
+      },
+      styles: { style: 'fill', color: premiumColor }
+    })
+
+    figures.push({
+      type: 'polygon',
+      attrs: {
+        coordinates: [
+          { x: minX, y: midY }, { x: maxX, y: midY },
+          { x: maxX, y: lowY }, { x: minX, y: lowY }
+        ]
+      },
+      styles: { style: 'fill', color: discountColor }
+    })
+
+    const createLineWithText = (y: number, price: number, ratio: string, color: string) => {
+      figures.push({
+        type: 'line',
+        attrs: { coordinates: [{ x: minX, y: y }, { x: maxX, y: y }] },
+        styles: { style: 'solid', color: color, size: 1 }
+      })
+      figures.push({
+        type: 'text',
+        attrs: { x: minX - 4, y: y, text: `${ratio} (${formatPrice(price)})`, align: 'right', baseline: 'middle' },
+        styles: { color: color, size: 12, paddingRight: 4 }
+      })
+    }
+
+    createLineWithText(highY, highPrice, '1', '#60a5fa')
+    createLineWithText(midY, midPrice, '0.5', '#ffffff')
+    createLineWithText(lowY, lowPrice, '0', '#34d399')
+
+    return figures
+  }
+})
 
 // Register custom Smart Money Concepts Indicator
 registerIndicator({
@@ -560,9 +653,24 @@ registerIndicator({
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 // Overlay names verified against klinecharts v9.8.12 getSupportedOverlays()
-type DrawTool = 'cursor' | 'segment' | 'straightLine' | 'rayLine' | 'horizontalStraightLine' | 'rect' | 'fibonacciLine' | 'customText' | 'longPosition' | 'shortPosition'
+type DrawTool = 'cursor' | 'segment' | 'straightLine' | 'rayLine' | 'horizontalStraightLine' | 'rect' | 'premiumDiscount' | 'customText' | 'longPosition' | 'shortPosition'
 
 interface MAConfig { period: number; color: string; enabled: boolean }
+
+export interface Trade {
+  id: string;
+  type: 'long' | 'short';
+  entryPrice: number;
+  slPrice: number;
+  tpPrice: number;
+  riskAmount: number;
+  rr: number;
+  overlayId: string;
+  status: 'open' | 'win' | 'loss';
+  openIndex: number;
+  closeIndex?: number;
+  pnl?: number;
+}
 
 // ─── Dark theme for klinecharts ───────────────────────────────────────────────
 const darkStyles = {
@@ -584,6 +692,12 @@ export default function BacktestingPage() {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<Chart | null>(null)
   const overlayIdsRef = useRef<string[]>([])  // track overlay IDs for undo
+
+  // --- Refs to prevent stale closures in onDrawEnd callback ---
+  const currentIndexRef = useRef(0)
+  const accountBalanceRef = useRef(100000)
+  const riskPercentRef = useRef(1.0)
+  const activeTradesRef = useRef<Trade[]>([])
 
   const [fullData, setFullData] = useState<KLineData[]>([])
   const [isPlaying, setIsPlaying] = useState(false)
@@ -610,6 +724,18 @@ export default function BacktestingPage() {
     { period: 200,color: '#ef4444', enabled: false },
   ])
 
+  // Account & Trades
+  const [accountBalance, setAccountBalance] = useState(100000)
+  const [riskPercent, setRiskPercent] = useState(1.0)
+  const [activeTrades, setActiveTrades] = useState<Trade[]>([])
+  const [tradeHistory, setTradeHistory] = useState<Trade[]>([])
+
+  // Keep refs in sync with state
+  useEffect(() => { currentIndexRef.current = currentIndex }, [currentIndex])
+  useEffect(() => { accountBalanceRef.current = accountBalance }, [accountBalance])
+  useEffect(() => { riskPercentRef.current = riskPercent }, [riskPercent])
+  useEffect(() => { activeTradesRef.current = activeTrades }, [activeTrades])
+
   // Internal undo (used by both button and keyboard shortcut)
   const undoLastDrawingInternal = useCallback(() => {
     const ids = overlayIdsRef.current
@@ -617,6 +743,10 @@ export default function BacktestingPage() {
       const lastId = ids[ids.length - 1]
       chartRef.current?.removeOverlay(lastId)
       overlayIdsRef.current = ids.slice(0, -1)
+
+      // Remove from active trades if it was a position
+      setActiveTrades(prev => prev.filter(t => t.overlayId !== lastId))
+      activeTradesRef.current = activeTradesRef.current.filter(t => t.overlayId !== lastId)
     }
   }, [])
 
@@ -627,6 +757,8 @@ export default function BacktestingPage() {
 
     const chart = init(container)
     if (!chart) return
+
+    chart.setTimezone('Asia/Bangkok')
 
     chartRef.current = chart
 
@@ -732,7 +864,7 @@ export default function BacktestingPage() {
     }
   }, [currentIndex, fullData])
 
-  // ─── Playback loop ─────────────────────────────────────────────────────────
+  // ─── Playback loop & Trade Evaluation ───────────────────────────────────────
   useEffect(() => {
     let interval: NodeJS.Timeout
     if (isPlaying && fullData.length > 0 && currentIndex < fullData.length) {
@@ -745,6 +877,60 @@ export default function BacktestingPage() {
     }
     return () => clearInterval(interval)
   }, [isPlaying, currentIndex, fullData, playbackSpeed])
+
+  // Evaluate Active Trades whenever currentIndex changes
+  // Uses activeTradesRef to avoid stale closures and infinite loops
+  useEffect(() => {
+    if (activeTradesRef.current.length === 0 || fullData.length === 0) return
+
+    const currentCandle = fullData[currentIndex]
+    if (!currentCandle) return
+
+    const trades = activeTradesRef.current
+    const remaining: Trade[] = []
+    const closed: Trade[] = []
+    let pnlDelta = 0
+
+    for (const trade of trades) {
+      // Only evaluate if candle is strictly after openIndex
+      if (currentIndex <= trade.openIndex) {
+        remaining.push(trade)
+        continue
+      }
+
+      let isWin = false
+      let isLoss = false
+      
+      if (trade.type === 'long') {
+        if (currentCandle.low <= trade.slPrice) isLoss = true
+        else if (currentCandle.high >= trade.tpPrice) isWin = true
+      } else {
+        if (currentCandle.high >= trade.slPrice) isLoss = true
+        else if (currentCandle.low <= trade.tpPrice) isWin = true
+      }
+
+      if (isWin || isLoss) {
+        const pnl = isWin ? (trade.riskAmount * trade.rr) : -trade.riskAmount
+        pnlDelta += pnl
+        closed.push({ 
+          ...trade, 
+          status: (isWin ? 'win' : 'loss') as 'win'|'loss', 
+          closeIndex: currentIndex, 
+          pnl 
+        })
+      } else {
+        remaining.push(trade)
+      }
+    }
+
+    if (closed.length > 0) {
+      // Immediately update the ref so next evaluation uses fresh data
+      activeTradesRef.current = remaining
+      setActiveTrades(remaining)
+      setTradeHistory(h => [...closed, ...h])
+      setAccountBalance(b => b + pnlDelta)
+    }
+  }, [currentIndex, fullData])
 
   // ─── CSV Parsing ───────────────────────────────────────────────────────────
   const parseCSVText = (text: string, name: string) => {
@@ -823,6 +1009,10 @@ export default function BacktestingPage() {
     chartRef.current?.removeOverlay({})
     overlayIdsRef.current = []
     setActiveTool('cursor')
+
+    // Clear all active trades as well
+    setActiveTrades([])
+    activeTradesRef.current = []
   }
 
   // ─── Drawing tool handler ──────────────────────────────────────────────────
@@ -845,22 +1035,140 @@ export default function BacktestingPage() {
       onDeselected: () => setSelectedOverlay(null)
     }
 
-    if (tool === 'customText' || tool === 'rect') {
-      overlayParams.onDrawEnd = (event: any) => {
-        // Prompt user for text after they place the points
-        const promptMsg = tool === 'rect' ? 'Enter text for box (optional):' : 'Enter text to display:'
-        const text = window.prompt(promptMsg)
-        
-        if (text) {
-          chartRef.current?.overrideOverlay({ id: event.overlay.id, extendData: { text, color: '#facc15' } })
-          setSelectedOverlay({ ...event.overlay, extendData: { text, color: '#facc15' } })
-        } else if (tool === 'customText') {
-          // Cancel drawing if no text entered for customText
-          chartRef.current?.removeOverlay(event.overlay.id)
+    // For position tools: update trade prices when user drags a dot
+    if (tool === 'longPosition' || tool === 'shortPosition') {
+      const updateTradeFromEvent = (event: any) => {
+        const overlayId = event.overlay.id
+        const isLong = tool === 'longPosition'
+
+        // Use module-level var first (updated synchronously by createPointFigures before this fires)
+        let entry: number, tp: number, sl: number
+        if (lastPositionPrices.overlayId === overlayId && lastPositionPrices.entryPrice !== 0) {
+          entry = lastPositionPrices.entryPrice
+          tp    = lastPositionPrices.tpPrice
+          sl    = lastPositionPrices.slPrice
         } else {
-          // For rect, if no text, just set default color
-          chartRef.current?.overrideOverlay({ id: event.overlay.id, extendData: { text: '', color: '#facc15' } })
-          setSelectedOverlay({ ...event.overlay, extendData: { text: '', color: '#facc15' } })
+          const ext = event.overlay.extendData as any
+          if (!ext || typeof ext.entryPrice !== 'number') return
+          entry = ext.entryPrice
+          tp    = ext.tpPrice
+          sl    = ext.slPrice
+        }
+
+        // Auto-correct orientation after drag
+        if (isLong) {
+          if (tp < sl) { [tp, sl] = [sl, tp] }
+          if (tp <= entry) tp = entry + Math.abs(entry - sl)
+          if (sl >= entry) sl = entry - Math.abs(tp - entry)
+        } else {
+          if (tp > sl) { [tp, sl] = [sl, tp] }
+          if (sl <= entry) sl = entry + Math.abs(entry - tp)
+          if (tp >= entry) tp = entry - Math.abs(sl - entry)
+        }
+
+        const risk = Math.abs(entry - sl)
+        const reward = Math.abs(tp - entry)
+        const rr = risk > 0 ? reward / risk : 0
+
+        // Update the matching active trade
+        setActiveTrades(prev => {
+          const updated = prev.map(trade =>
+            trade.overlayId === overlayId
+              ? { ...trade, entryPrice: entry, tpPrice: tp, slPrice: sl, rr }
+              : trade
+          )
+          activeTradesRef.current = updated
+          return updated
+        })
+      }
+
+      // Hook to klinecharts real-time moving and drawing events
+      overlayParams.onPressedMoving = updateTradeFromEvent
+      overlayParams.onPressedMoveEnd = updateTradeFromEvent
+      overlayParams.onDrawing = updateTradeFromEvent
+    }
+
+    if (tool === 'customText' || tool === 'rect' || tool === 'longPosition' || tool === 'shortPosition') {
+      overlayParams.onDrawEnd = (event: any) => {
+        const overlayId = event.overlay.id
+        
+        if (tool === 'longPosition' || tool === 'shortPosition') {
+          // Priority 1: module-level lastPositionPrices (set by createPointFigures synchronously
+          //             before this onDrawEnd fires — most reliable because klinecharts may
+          //             reset overlay.extendData before calling the callback)
+          const ext = event.overlay.extendData as any
+          const coords = event.overlay.points
+
+          let entry: number, rawTp: number, rawSl: number
+
+          if (lastPositionPrices.overlayId === overlayId && lastPositionPrices.entryPrice !== 0) {
+            // ✅ Module-level var: always up-to-date from last createPointFigures call
+            entry = lastPositionPrices.entryPrice
+            rawTp = lastPositionPrices.tpPrice
+            rawSl = lastPositionPrices.slPrice
+          } else if (ext && typeof ext.entryPrice === 'number') {
+            // ✅ extendData backup
+            entry = ext.entryPrice
+            rawTp = ext.tpPrice
+            rawSl = ext.slPrice
+          } else {
+            // Fallback: read from points array
+            entry = coords?.[0]?.value ?? 0
+            rawTp = coords?.[1]?.value ?? entry
+            rawSl = coords?.[2]?.value ?? (entry - (rawTp - entry))
+          }
+
+          const isLong = tool === 'longPosition'
+
+          // Auto-correct TP/SL orientation
+          let tp = rawTp
+          let sl = rawSl
+          if (isLong) {
+            if (tp < sl) { [tp, sl] = [sl, tp] }
+            if (tp <= entry) tp = entry + Math.abs(entry - sl)
+            if (sl >= entry) sl = entry - Math.abs(tp - entry)
+          } else {
+            if (tp > sl) { [tp, sl] = [sl, tp] }
+            if (sl <= entry) sl = entry + Math.abs(entry - tp)
+            if (tp >= entry) tp = entry - Math.abs(sl - entry)
+          }
+
+          const risk = Math.abs(entry - sl)
+          const reward = Math.abs(tp - entry)
+          if (risk > 0) {
+            const rr = reward / risk
+            const riskAmount = (accountBalanceRef.current * riskPercentRef.current) / 100
+            const snapshotIndex = currentIndexRef.current
+            
+            const newTrade: Trade = {
+              id: Math.random().toString(36).substr(2, 9),
+              type: isLong ? 'long' : 'short',
+              entryPrice: entry,
+              slPrice: sl,
+              tpPrice: tp,
+              riskAmount,
+              rr,
+              overlayId,
+              status: 'open',
+              openIndex: snapshotIndex
+            }
+            setActiveTrades(prev => [...prev, newTrade])
+            activeTradesRef.current = [...activeTradesRef.current, newTrade]
+          }
+        } else {
+          // Existing rect/customText logic
+          const promptMsg = tool === 'rect' ? 'Enter text for box (optional):' : 'Enter text to display:'
+          const text = window.prompt(promptMsg)
+          
+          if (text) {
+            chartRef.current?.overrideOverlay({ id: overlayId, extendData: { text, color: '#facc15' } })
+            setSelectedOverlay({ ...event.overlay, extendData: { text, color: '#facc15' } })
+          } else if (tool === 'customText') {
+            chartRef.current?.removeOverlay(overlayId)
+          } else {
+            chartRef.current?.overrideOverlay({ id: overlayId, extendData: { text: '', color: '#facc15' } })
+            setSelectedOverlay({ ...event.overlay, extendData: { text: '', color: '#facc15' } })
+          }
         }
       }
     }
@@ -885,7 +1193,7 @@ export default function BacktestingPage() {
     { tool: 'rayLine',               icon: <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><line x1="4" y1="20" x2="20" y2="4"/><polygon points="20,4 14,4 20,10" fill="currentColor"/></svg>, label: 'Ray Line' },
     { tool: 'horizontalStraightLine',icon: <Minus className="size-4" />,        label: 'Horizontal Line' },
     { tool: 'rect',                  icon: <Square className="size-4" />,       label: 'Rectangle / Box' },
-    { tool: 'fibonacciLine',         icon: <BarChart2 className="size-4" />,    label: 'Fibonacci Retracement' },
+    { tool: 'premiumDiscount',       icon: <BarChart2 className="size-4" />,    label: 'Premium Discount' },
     { tool: 'customText',            icon: <Type className="size-4" />,         label: 'Text' },
     { tool: 'longPosition',          icon: <div className="text-[10px] font-bold border-b border-t border-slate-400 px-0.5" style={{lineHeight:'1'}}>L</div>, label: 'Long Position' },
     { tool: 'shortPosition',         icon: <div className="text-[10px] font-bold border-b border-t border-slate-400 px-0.5" style={{lineHeight:'1'}}>S</div>, label: 'Short Position' },
@@ -1125,6 +1433,11 @@ export default function BacktestingPage() {
                   {/* Delete */}
                   <button onClick={() => {
                       chartRef.current?.removeOverlay({ id: selectedOverlay.id })
+                      
+                      // Also remove from active trades if it's a position
+                      setActiveTrades(prev => prev.filter(t => t.overlayId !== selectedOverlay.id))
+                      activeTradesRef.current = activeTradesRef.current.filter(t => t.overlayId !== selectedOverlay.id)
+
                       setSelectedOverlay(null)
                     }}
                     className="p-1.5 rounded-lg text-rose-500 hover:text-rose-600 hover:bg-rose-50/10 transition-colors"
@@ -1165,7 +1478,12 @@ export default function BacktestingPage() {
 
             {/* Order Entry */}
             <div className={`bg-white rounded-[1.5rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 shrink-0 transition-opacity ${fullData.length === 0 ? 'opacity-50 pointer-events-none' : ''}`}>
-              <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-4">Order Entry</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Order Entry</h3>
+                <div className="text-[11px] font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+                  Balance: ${accountBalance.toLocaleString()}
+                </div>
+              </div>
 
               <div className="flex items-center gap-2 mb-4 bg-slate-50 p-1 rounded-xl border border-slate-100">
                 <button className="flex-1 py-2 rounded-lg text-xs font-bold transition-all bg-white text-slate-800 shadow-sm border border-slate-200">Market</button>
@@ -1176,9 +1494,17 @@ export default function BacktestingPage() {
                 <div>
                   <div className="flex justify-between text-xs mb-1.5">
                     <span className="font-bold text-slate-500">Risk %</span>
-                    <span className="font-bold text-slate-800">1.0% ($1,000)</span>
+                    <span className="font-bold text-slate-800">{riskPercent.toFixed(1)}% (${(accountBalance * riskPercent / 100).toLocaleString()})</span>
                   </div>
-                  <input type="range" className="w-full accent-sky-500" min="0.1" max="5" step="0.1" defaultValue="1" />
+                  <input 
+                    type="range" 
+                    className="w-full accent-sky-500" 
+                    min="0.1" 
+                    max="5" 
+                    step="0.1" 
+                    value={riskPercent} 
+                    onChange={(e) => setRiskPercent(parseFloat(e.target.value))} 
+                  />
                 </div>
 
                 <div className="relative">
@@ -1207,12 +1533,86 @@ export default function BacktestingPage() {
             {/* Active Position */}
             <div className="bg-white rounded-[1.5rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex-1 flex flex-col min-h-[180px]">
               <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-4">Active Position</h3>
-              <div className="flex-1 flex flex-col items-center justify-center text-center text-slate-400">
-                <Crosshair className="size-8 mb-2 opacity-20" />
-                <p className="text-xs font-medium">No active positions</p>
-                <p className="text-[10px]">Execute a trade to view it here.</p>
-              </div>
+              
+              {activeTrades.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-center text-slate-400">
+                  <Crosshair className="size-8 mb-2 opacity-20" />
+                  <p className="text-xs font-medium">No active positions</p>
+                  <p className="text-[10px]">Draw Long/Short tool to execute.</p>
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col gap-3 overflow-y-auto pr-1">
+                  {activeTrades.map(trade => {
+                    const currentPrice = fullData[currentIndex]?.close || trade.entryPrice
+                    let floatPnL = 0
+                    if (trade.type === 'long') {
+                      floatPnL = ((currentPrice - trade.entryPrice) / (trade.tpPrice - trade.entryPrice)) * (trade.riskAmount * trade.rr)
+                    } else {
+                      floatPnL = ((trade.entryPrice - currentPrice) / (trade.entryPrice - trade.tpPrice)) * (trade.riskAmount * trade.rr)
+                    }
+                    
+                    return (
+                      <div key={trade.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-sm relative overflow-hidden group">
+                        <div className={`absolute left-0 top-0 bottom-0 w-1 ${trade.type === 'long' ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                        <div className="flex justify-between items-start mb-2 pl-2">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md ${trade.type === 'long' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                              {trade.type}
+                            </span>
+                            <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-md border border-slate-200">
+                              RR {trade.rr?.toFixed(2) || '0.00'}
+                            </span>
+                          </div>
+                          <div className={`text-sm font-bold ${floatPnL >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {floatPnL >= 0 ? '+' : ''}{floatPnL.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                          </div>
+                        </div>
+                        <div className="pl-2 grid grid-cols-2 gap-x-2 gap-y-1 text-[10px]">
+                          <div className="text-slate-500">Entry: <span className="text-slate-700 font-mono font-bold">{trade.entryPrice.toFixed(3)}</span></div>
+                          <div className="text-slate-500 text-right">Risk: <span className="text-slate-700 font-mono font-bold">${trade.riskAmount.toLocaleString()}</span></div>
+                          <div className="text-rose-500">SL: <span className="font-mono font-bold">{trade.slPrice.toFixed(3)}</span></div>
+                          <div className="text-emerald-500 text-right">TP: <span className="font-mono font-bold">{trade.tpPrice.toFixed(3)}</span></div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
+
+            {/* Trade History */}
+            {tradeHistory.length > 0 && (
+              <div className="bg-white rounded-[1.5rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex-1 flex flex-col min-h-[180px] mt-6">
+                <h3 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-4">Trade History (Last 5)</h3>
+                <div className="flex-1 flex flex-col gap-2 overflow-y-auto pr-1">
+                  {tradeHistory.slice(0, 5).map(trade => (
+                    <div key={trade.id} className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md ${trade.type === 'long' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                            {trade.type}
+                          </span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${trade.status === 'win' ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
+                            {trade.status === 'win' ? 'WIN' : 'LOSS'}
+                          </span>
+                          <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-md border border-slate-200">
+                            RR {trade.rr?.toFixed(2) || '0.00'}
+                          </span>
+                        </div>
+                        <div className={`text-xs font-bold ${trade.pnl && trade.pnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                          {trade.pnl && trade.pnl >= 0 ? '+' : ''}{trade.pnl?.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1 mt-1.5 text-[9px] font-mono">
+                        <div className="text-slate-400">E: <span className="text-slate-600 font-bold">{trade.entryPrice.toFixed(2)}</span></div>
+                        <div className="text-rose-400 text-center">SL: <span className="font-bold">{trade.slPrice.toFixed(2)}</span></div>
+                        <div className="text-emerald-400 text-right">TP: <span className="font-bold">{trade.tpPrice.toFixed(2)}</span></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
           </div>
         </div>
