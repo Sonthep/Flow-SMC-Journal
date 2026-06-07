@@ -8,25 +8,35 @@ import { Loader2 } from "lucide-react"
 
 export default function DashboardClient() {
   const [trades, setTrades] = useState<any[]>([])
+  const [accountSize, setAccountSize] = useState<number>(10000)
   const [isLoading, setIsLoading] = useState(true)
 
-  const fetchTrades = async () => {
+  const fetchData = async () => {
     try {
-      const res = await fetch('/api/trades')
-      const data = await res.json()
-      if (data.success) {
-        setTrades(data.trades)
+      const [tradesRes, profileRes] = await Promise.all([
+        fetch('/api/trades'),
+        fetch('/api/user/profile')
+      ])
+      
+      const tradesData = await tradesRes.json()
+      if (tradesData.success) {
+        setTrades(tradesData.trades)
+      }
+
+      const profileData = await profileRes.json()
+      if (profileData.success && profileData.user?.accountSize) {
+        setAccountSize(profileData.user.accountSize)
       }
     } catch (err) {
-      console.error("Error fetching trades:", err)
+      console.error("Error fetching dashboard data:", err)
     } finally {
       setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    fetchTrades()
-    const interval = setInterval(fetchTrades, 10000)
+    fetchData()
+    const interval = setInterval(fetchData, 10000)
     return () => clearInterval(interval)
   }, [])
 
@@ -49,11 +59,11 @@ export default function DashboardClient() {
 
   // Total R & Equity Curve
   let totalR = 0
-  let currentBalance = 10000 // Base balance
+  let currentBalance = accountSize // Base balance from profile
   const equityData: { name: string; balance: number }[] = []
   
   if (finishedTrades.length === 0) {
-    equityData.push({ name: 'Start', balance: 10000 })
+    equityData.push({ name: 'Start', balance: accountSize })
   }
 
   finishedTrades.forEach((t, i) => {
@@ -125,7 +135,7 @@ export default function DashboardClient() {
           </button>
         </div>
         <div className="p-6">
-          <TradesTable recentTrades={trades} isLoading={isLoading} onRefresh={fetchTrades} />
+          <TradesTable recentTrades={trades} isLoading={isLoading} onRefresh={fetchData} />
         </div>
       </div>
     </>

@@ -368,7 +368,7 @@ export default function JournalPage() {
                     const isLoss = trade.outcome === "LOSS";
                     const isBuy = trade.direction === "BUY";
                     
-                    const tags = []
+                    const tags: string[] = []
                     if (trade.hasChoch) tags.push("CHOCH")
                     if (trade.entryZone === "FVG") tags.push("FVG")
                     else tags.push("OB")

@@ -38,7 +38,7 @@ export default function WinLossPieChart({ winCount, lossCount, winRate }: Props)
             <Tooltip 
               contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.1)' }}
               itemStyle={{ color: '#0f172a', fontWeight: 'bold' }}
-              formatter={(value: number) => [`${value}`, 'Trades']}
+              formatter={(value: any) => [`${value}`, 'Trades']}
             />
           </PieChart>
         </ResponsiveContainer>

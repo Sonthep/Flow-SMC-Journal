@@ -1440,9 +1440,9 @@ export default function BacktestingPage() {
                         const oldTrade = activeTradesRef.current.find(t => t.overlayId === selectedOverlay.id)
                         const oldData = selectedOverlay.extendData || {}
                         const newData = typeof oldData === 'string' ? { text: oldData, color: c } : { ...oldData, color: c }
-                        chartRef.current.overrideOverlay({ id: selectedOverlay.id, extendData: newData })
+                        chartRef.current?.overrideOverlay({ id: selectedOverlay.id, extendData: newData })
                         // If it's a standard line, also update its styles
-                        chartRef.current.overrideOverlay({ id: selectedOverlay.id, styles: { line: { color: c }, polygon: { color: c + '20', borderColor: c } } })
+                        chartRef.current?.overrideOverlay({ id: selectedOverlay.id, styles: { line: { color: c }, polygon: { color: c + '20', borderColor: c } } })
                         setSelectedOverlay({ ...selectedOverlay, extendData: newData })
                         actionHistoryRef.current.push({ type: 'update', oldOverlay, oldTrade })
                       }}

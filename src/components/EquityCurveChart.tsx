@@ -42,7 +42,7 @@ export default function EquityCurveChart({ data, currentBalance }: Props) {
               contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)' }}
               itemStyle={{ color: '#0f172a', fontWeight: 'bold' }}
               labelStyle={{ color: '#64748b', fontSize: '12px', marginBottom: '4px' }}
-              formatter={(value: number) => [`$${value}`, 'Balance']}
+              formatter={(value: any) => [`$${value}`, 'Balance']}
             />
             <Area type="monotone" dataKey="balance" stroke="#0ea5e9" strokeWidth={3} fillOpacity={1} fill="url(#colorBalance)" />
           </AreaChart>

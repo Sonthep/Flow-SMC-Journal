@@ -3,11 +3,13 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, BookOpen, LineChart, Settings, HelpCircle, LogOut, PlusCircle } from "lucide-react"
+import { LayoutDashboard, BookOpen, LineChart, Settings, LogOut, HelpCircle, LogIn, PlusCircle } from "lucide-react"
+import { useSession, signOut, signIn } from "next-auth/react"
 import AddTradeSlideOver from "./AddTradeSlideOver"
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const { data: session } = useSession()
   const [isAddTradeOpen, setIsAddTradeOpen] = useState(false)
 
   const navItems = [
@@ -64,15 +66,30 @@ export default function Sidebar() {
           New Trade
         </button>
         
-        <div className="pt-2 space-y-1">
-          <button className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors">
-            <HelpCircle className="size-4.5" />
-            <span className="text-sm font-medium">Support</span>
-          </button>
-          <button className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors">
-            <LogOut className="size-4.5" />
-            <span className="text-sm font-medium">Logout</span>
-          </button>
+        <div className="mt-auto px-4 pb-6 flex flex-col gap-2">
+          <Link href="/support" className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-800 font-bold transition-colors rounded-xl hover:bg-slate-50">
+            <HelpCircle className="size-5" />
+            Support
+          </Link>
+          {session ? (
+            <button 
+              onClick={() => signOut()}
+              className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-800 font-bold transition-colors rounded-xl hover:bg-slate-50 text-left w-full"
+            >
+              <div className="size-6 bg-slate-800 rounded-md flex items-center justify-center text-[10px] text-white">
+                {session.user?.name ? session.user.name.charAt(0).toUpperCase() : 'U'}
+              </div>
+              Logout
+            </button>
+          ) : (
+            <button 
+              onClick={() => signIn()}
+              className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-slate-800 font-bold transition-colors rounded-xl hover:bg-slate-50 text-left w-full"
+            >
+              <LogIn className="size-5" />
+              Login
+            </button>
+          )}
         </div>
       </div>
 

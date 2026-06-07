@@ -12,6 +12,7 @@ interface Trade {
   rr?: string
   outcome?: string
   dir?: string
+  direction?: string
   entryPrice?: number
   stopLoss?: number
   takeProfit?: number
@@ -22,11 +23,14 @@ interface Trade {
   tp?: string
   contextImgUrl?: string | null
   entryImgUrl?: string | null
-  entryImgUrl?: string | null
   pair?: string
   title?: string | null
   journalNote?: string
   createdAt?: string | Date
+  hasChoch?: boolean
+  sweepType?: string
+  entryZone?: string
+  valueZone?: string
 }
 
 interface Props {

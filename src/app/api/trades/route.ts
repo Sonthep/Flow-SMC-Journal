@@ -1,13 +1,21 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "@/lib/auth"
 
 export async function POST(request: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session || !(session.user as any)?.id) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
+    }
+
     const body = await request.json()
     
     // Default mapped values to match the Prisma Schema
     const trade = await prisma.tradeLog.create({
       data: {
+        userId: (session.user as any).id,
         title: body.title || null,
         createdAt: body.entryDate ? new Date(body.entryDate) : undefined,
         pair: body.asset || 'XAUUSD',
@@ -46,7 +54,13 @@ export async function POST(request: Request) {
 
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session || !(session.user as any)?.id) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
+    }
+
     const trades = await prisma.tradeLog.findMany({
+      where: { userId: (session.user as any).id },
       orderBy: { createdAt: 'desc' }
     })
     return NextResponse.json({ success: true, trades })
