@@ -6,7 +6,7 @@ import {
   Play, SkipForward, Pause, Upload, FileText,
   Crosshair, Minus, Square, TrendingUp, Trash2,
   Undo2, ZoomIn, ZoomOut, Moon, Sun, ChevronLeft,
-  ChevronRight, BarChart2, Type
+  ChevronRight, BarChart2, Type, Lock, Unlock
 } from "lucide-react"
 import { init, dispose, Chart, KLineData, registerOverlay, registerIndicator } from "klinecharts"
 
@@ -688,10 +688,25 @@ const darkStyles = {
 
 const lightStyles = {}   // klinecharts default
 
+// Helper to clone overlay state for Undo history
+const cloneOverlayState = (overlay: any) => {
+  if (!overlay) return null
+  return {
+    id: overlay.id,
+    groupId: overlay.groupId,
+    name: overlay.name,
+    points: overlay.points ? JSON.parse(JSON.stringify(overlay.points)) : [],
+    extendData: overlay.extendData ? JSON.parse(JSON.stringify(overlay.extendData)) : undefined,
+    styles: overlay.styles ? JSON.parse(JSON.stringify(overlay.styles)) : undefined,
+    lock: overlay.lock,
+    visible: overlay.visible
+  }
+}
+
 export default function BacktestingPage() {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<Chart | null>(null)
-  const overlayIdsRef = useRef<string[]>([])  // track overlay IDs for undo
+  const actionHistoryRef = useRef<any[]>([])  // stack of actions for true Undo
 
   // --- Refs to prevent stale closures in onDrawEnd callback ---
   const currentIndexRef = useRef(0)
@@ -738,15 +753,26 @@ export default function BacktestingPage() {
 
   // Internal undo (used by both button and keyboard shortcut)
   const undoLastDrawingInternal = useCallback(() => {
-    const ids = overlayIdsRef.current
-    if (ids.length > 0) {
-      const lastId = ids[ids.length - 1]
-      chartRef.current?.removeOverlay(lastId)
-      overlayIdsRef.current = ids.slice(0, -1)
+    const history = actionHistoryRef.current
+    if (history.length === 0) return
+    const action = history.pop()
 
-      // Remove from active trades if it was a position
-      setActiveTrades(prev => prev.filter(t => t.overlayId !== lastId))
-      activeTradesRef.current = activeTradesRef.current.filter(t => t.overlayId !== lastId)
+    if (action.type === 'create') {
+      chartRef.current?.removeOverlay(action.id)
+      setActiveTrades(prev => prev.filter(t => t.overlayId !== action.id))
+      activeTradesRef.current = activeTradesRef.current.filter(t => t.overlayId !== action.id)
+    } else if (action.type === 'delete') {
+      chartRef.current?.createOverlay(action.oldOverlay)
+      if (action.oldTrade) {
+        setActiveTrades(prev => [...prev, action.oldTrade])
+        activeTradesRef.current = [...activeTradesRef.current, action.oldTrade]
+      }
+    } else if (action.type === 'update') {
+      chartRef.current?.overrideOverlay(action.oldOverlay)
+      if (action.oldTrade) {
+        setActiveTrades(prev => prev.map(t => t.overlayId === action.oldTrade.overlayId ? action.oldTrade : t))
+        activeTradesRef.current = activeTradesRef.current.map(t => t.overlayId === action.oldTrade.overlayId ? action.oldTrade : t)
+      }
     }
   }, [])
 
@@ -1007,7 +1033,7 @@ export default function BacktestingPage() {
 
   const clearAllDrawings = () => {
     chartRef.current?.removeOverlay({})
-    overlayIdsRef.current = []
+    actionHistoryRef.current = []
     setActiveTool('cursor')
 
     // Clear all active trades as well
@@ -1082,10 +1108,24 @@ export default function BacktestingPage() {
         })
       }
 
-      // Hook to klinecharts real-time moving and drawing events
-      overlayParams.onPressedMoving = updateTradeFromEvent
-      overlayParams.onPressedMoveEnd = updateTradeFromEvent
-      overlayParams.onDrawing = updateTradeFromEvent
+        // Hook to klinecharts real-time moving and drawing events
+        
+        let preMoveOverlayState: any = null
+        let preMoveTradeState: any = null
+
+        overlayParams.onPressedMoveStart = (event: any) => {
+          preMoveOverlayState = cloneOverlayState(event.overlay)
+          preMoveTradeState = activeTradesRef.current.find(t => t.overlayId === event.overlay.id)
+        }
+
+        overlayParams.onPressedMoving = updateTradeFromEvent
+        overlayParams.onPressedMoveEnd = (event: any) => {
+          if (preMoveOverlayState) {
+            actionHistoryRef.current.push({ type: 'update', oldOverlay: preMoveOverlayState, oldTrade: preMoveTradeState })
+          }
+          updateTradeFromEvent(event)
+        }
+        overlayParams.onDrawing = updateTradeFromEvent
     }
 
     if (tool === 'customText' || tool === 'rect' || tool === 'longPosition' || tool === 'shortPosition') {
@@ -1121,8 +1161,7 @@ export default function BacktestingPage() {
           const isLong = tool === 'longPosition'
 
           // Auto-correct TP/SL orientation
-          let tp = rawTp
-          let sl = rawSl
+          let tp = rawTp, sl = rawSl
           if (isLong) {
             if (tp < sl) { [tp, sl] = [sl, tp] }
             if (tp <= entry) tp = entry + Math.abs(entry - sl)
@@ -1132,14 +1171,12 @@ export default function BacktestingPage() {
             if (sl <= entry) sl = entry + Math.abs(entry - tp)
             if (tp >= entry) tp = entry - Math.abs(sl - entry)
           }
-
           const risk = Math.abs(entry - sl)
           const reward = Math.abs(tp - entry)
           if (risk > 0) {
             const rr = reward / risk
             const riskAmount = (accountBalanceRef.current * riskPercentRef.current) / 100
             const snapshotIndex = currentIndexRef.current
-            
             const newTrade: Trade = {
               id: Math.random().toString(36).substr(2, 9),
               type: isLong ? 'long' : 'short',
@@ -1154,12 +1191,11 @@ export default function BacktestingPage() {
             }
             setActiveTrades(prev => [...prev, newTrade])
             activeTradesRef.current = [...activeTradesRef.current, newTrade]
+            actionHistoryRef.current.push({ type: 'create', id: overlayId })
           }
         } else {
-          // Existing rect/customText logic
           const promptMsg = tool === 'rect' ? 'Enter text for box (optional):' : 'Enter text to display:'
           const text = window.prompt(promptMsg)
-          
           if (text) {
             chartRef.current?.overrideOverlay({ id: overlayId, extendData: { text, color: '#facc15' } })
             setSelectedOverlay({ ...event.overlay, extendData: { text, color: '#facc15' } })
@@ -1169,13 +1205,16 @@ export default function BacktestingPage() {
             chartRef.current?.overrideOverlay({ id: overlayId, extendData: { text: '', color: '#facc15' } })
             setSelectedOverlay({ ...event.overlay, extendData: { text: '', color: '#facc15' } })
           }
+          actionHistoryRef.current.push({ type: 'create', id: overlayId })
         }
       }
     }
 
     const id = chartRef.current.createOverlay(overlayParams) as string | null
     if (id) {
-      overlayIdsRef.current.push(id)
+      if (tool !== 'customText' && tool !== 'rect' && tool !== 'longPosition' && tool !== 'shortPosition') {
+        actionHistoryRef.current.push({ type: 'create', id })
+      }
     }
   }
 
@@ -1397,13 +1436,15 @@ export default function BacktestingPage() {
                   {/* Colors */}
                   {['#facc15', '#3b82f6', '#ef4444', '#22c55e', '#a855f7', '#ffffff'].map(c => (
                     <button key={c} onClick={() => {
-                        if (!chartRef.current) return
+                        const oldOverlay = cloneOverlayState(selectedOverlay)
+                        const oldTrade = activeTradesRef.current.find(t => t.overlayId === selectedOverlay.id)
                         const oldData = selectedOverlay.extendData || {}
                         const newData = typeof oldData === 'string' ? { text: oldData, color: c } : { ...oldData, color: c }
                         chartRef.current.overrideOverlay({ id: selectedOverlay.id, extendData: newData })
                         // If it's a standard line, also update its styles
                         chartRef.current.overrideOverlay({ id: selectedOverlay.id, styles: { line: { color: c }, polygon: { color: c + '20', borderColor: c } } })
                         setSelectedOverlay({ ...selectedOverlay, extendData: newData })
+                        actionHistoryRef.current.push({ type: 'update', oldOverlay, oldTrade })
                       }}
                       className="w-5 h-5 rounded-full border border-black/10 hover:scale-110 transition-transform"
                       style={{ backgroundColor: c }}
@@ -1418,10 +1459,13 @@ export default function BacktestingPage() {
                         const oldText = typeof selectedOverlay.extendData === 'string' ? selectedOverlay.extendData : (selectedOverlay.extendData?.text || '')
                         const newText = window.prompt('Edit text:', oldText)
                         if (newText !== null && chartRef.current) {
+                          const oldOverlay = cloneOverlayState(selectedOverlay)
+                          const oldTrade = activeTradesRef.current.find(t => t.overlayId === selectedOverlay.id)
                           const oldData = selectedOverlay.extendData || {}
                           const newData = typeof oldData === 'string' ? { text: newText } : { ...oldData, text: newText }
                           chartRef.current.overrideOverlay({ id: selectedOverlay.id, extendData: newData })
                           setSelectedOverlay({ ...selectedOverlay, extendData: newData })
+                          actionHistoryRef.current.push({ type: 'update', oldOverlay, oldTrade })
                         }
                       }}
                       className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-white/70 hover:text-white hover:bg-white/10' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}
@@ -1430,14 +1474,32 @@ export default function BacktestingPage() {
                     </button>
                   )}
 
+                  {/* Lock/Unlock */}
+                  <button onClick={() => {
+                      const oldOverlay = cloneOverlayState(selectedOverlay)
+                      const oldTrade = activeTradesRef.current.find(t => t.overlayId === selectedOverlay.id)
+                      const isLocked = !!selectedOverlay.lock
+                      chartRef.current?.overrideOverlay({ id: selectedOverlay.id, lock: !isLocked })
+                      setSelectedOverlay({ ...selectedOverlay, lock: !isLocked })
+                      actionHistoryRef.current.push({ type: 'update', oldOverlay, oldTrade })
+                    }}
+                    className={`p-1.5 rounded-lg transition-colors ${isDark ? 'text-white/70 hover:text-white hover:bg-white/10' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}
+                    title={selectedOverlay.lock ? "Unlock" : "Lock"}>
+                    {selectedOverlay.lock ? <Lock className="size-4 text-amber-500" /> : <Unlock className="size-4" />}
+                  </button>
+
                   {/* Delete */}
                   <button onClick={() => {
+                      const oldOverlay = cloneOverlayState(selectedOverlay)
+                      const oldTrade = activeTradesRef.current.find(t => t.overlayId === selectedOverlay.id)
+                      
                       chartRef.current?.removeOverlay({ id: selectedOverlay.id })
                       
                       // Also remove from active trades if it's a position
                       setActiveTrades(prev => prev.filter(t => t.overlayId !== selectedOverlay.id))
                       activeTradesRef.current = activeTradesRef.current.filter(t => t.overlayId !== selectedOverlay.id)
 
+                      actionHistoryRef.current.push({ type: 'delete', oldOverlay, oldTrade })
                       setSelectedOverlay(null)
                     }}
                     className="p-1.5 rounded-lg text-rose-500 hover:text-rose-600 hover:bg-rose-50/10 transition-colors"
