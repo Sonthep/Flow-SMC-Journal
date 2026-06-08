@@ -56,7 +56,7 @@ export default function TradesTable({ recentTrades, isLoading, onRefresh }: Prop
               const isBuy = trade.direction === "BUY"
               
               const date = new Date(trade.createdAt)
-              const timeString = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+              const timeString = date.toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit', timeZone: 'Asia/Bangkok', hour12: false})
               
               // Map tags
               const tags = []
@@ -76,7 +76,7 @@ export default function TradesTable({ recentTrades, isLoading, onRefresh }: Prop
                     <div className="flex flex-col justify-center">
                       <div className="flex items-center gap-2">
                         <span className="font-black text-slate-800 tracking-tight">{trade.pair || 'XAUUSD'}</span>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1.5 py-0.5 bg-slate-100 rounded">{trade.session || 'LONDON'} • {isBuy ? 'LONG' : 'SHORT'}</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1.5 py-0.5 bg-slate-100 rounded">{timeString} • {trade.session || 'LONDON'} • {isBuy ? 'LONG' : 'SHORT'}</span>
                       </div>
                       {trade.title && (
                         <div className="text-sm font-bold text-slate-700 mt-0.5 truncate max-w-[250px] md:max-w-[350px]">
@@ -97,7 +97,7 @@ export default function TradesTable({ recentTrades, isLoading, onRefresh }: Prop
                   <td className="py-3 pr-2 align-middle text-right">
                     <div className="flex items-center justify-end gap-3">
                       <span className={`font-mono font-bold ${isWin ? 'text-emerald-500' : isLoss ? 'text-rose-500' : 'text-slate-500'}`}>
-                        {trade.realizedRR ? `${trade.realizedRR > 0 ? '+' : ''}${trade.realizedRR}R` : '---'}
+                        {trade.realizedRR !== null && trade.realizedRR !== undefined ? `${trade.realizedRR > 0 ? '+' : ''}${Number(trade.realizedRR).toFixed(2)}R` : '---'}
                       </span>
                       <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wider border ${isWin ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : isLoss ? 'bg-rose-50 text-rose-600 border-rose-200' : isPending ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
                         {trade.outcome}
