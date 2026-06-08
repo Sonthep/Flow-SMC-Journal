@@ -388,10 +388,6 @@ export default function SetupPreviewModal({ isOpen, onClose, onUpdate, trade }: 
                       <CheckSquare className="size-4 text-emerald-500 mt-0.5 shrink-0" />
                       <span className="text-xs font-medium text-slate-700">Setup candle fully closed</span>
                     </div>
-                    <div className="flex items-start gap-2">
-                      <CheckSquare className="size-4 text-emerald-500 mt-0.5 shrink-0" />
-                      <span className="text-xs font-medium text-slate-700">Solid body close (No ambiguity)</span>
-                    </div>
                     <div className="flex items-start gap-2 opacity-50">
                       <div className="size-4 border-2 border-slate-300 rounded mt-0.5 shrink-0"></div>
                       <span className="text-xs font-medium text-slate-500 line-through">Waited for HTF alignment</span>

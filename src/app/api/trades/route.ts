@@ -33,10 +33,10 @@ export async function POST(request: Request) {
           return null;
         })(),
         outcome: body.outcome || 'PENDING',
-        sweepType: 'EXTERNAL_MAJOR', // Default enum mapping
+        sweepType: body.tags?.extSweep ? 'EXTERNAL_MAJOR' : body.tags?.intSweep ? 'INTERNAL' : 'EXTERNAL_MAJOR',
         hasChoch: body.tags?.chochWick || body.tags?.microChoch || false,
-        entryZone: 'FVG', // Default enum mapping
-        valueZone: body.checklist?.premiumDiscount ? 'DISCOUNT' : 'PREMIUM', // Derived mapping
+        entryZone: body.tags?.breakerBlock ? 'BREAKER' : body.tags?.freshOb ? 'ORDER_BLOCK' : 'FVG',
+        valueZone: body.checklist?.premiumDiscount ? 'DISCOUNT' : 'PREMIUM',
         preEmotion: body.preEmotion || 'CALM',
         duringEmotion: body.duringEmotion || 'PATIENT',
         exitReason: body.outcome === 'WIN' ? 'HIT_TP' : body.outcome === 'LOSS' || body.outcome === 'BE' ? 'HIT_SL' : 'RUNNING',

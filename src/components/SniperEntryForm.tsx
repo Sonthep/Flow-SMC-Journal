@@ -45,11 +45,13 @@ export default function SniperEntryForm({ className = "" }: { className?: string
     chochWick: false,
     microChoch: true,
     freshOb: false,
-    fvgMitigation: true
+    fvgMitigation: true,
+    breakerBlock: false,
+    idm: false,
+    bos: false
   })
   const [checklist, setChecklist] = useState({
     candleClosed: true,
-    solidBody: true,
     premiumDiscount: true
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -145,7 +147,6 @@ export default function SniperEntryForm({ className = "" }: { className?: string
       entryDate: new Date(entryDate).toISOString(),
       direction,
       riskPercent: risk,
-      lotSize: formData.get("lotSize"),
       session: formData.get("session"),
       entryPrice,
       stopLoss,
@@ -236,10 +237,6 @@ export default function SniperEntryForm({ className = "" }: { className?: string
             >
               SELL / SHORT
             </button>
-            <div className="flex items-center gap-2 ml-2">
-              <span className="text-xs font-medium text-slate-500">Lot Size:</span>
-              <input name="lotSize" type="text" defaultValue="10.00" className="w-16 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-sky-500 text-center" />
-            </div>
           </div>
           
           <div className="flex items-center gap-4 text-xs">
@@ -343,6 +340,18 @@ export default function SniperEntryForm({ className = "" }: { className?: string
               {tags.fvgMitigation ? <CheckSquare className="size-4 text-sky-500" /> : <Square className="size-4 text-slate-300 group-hover:text-slate-400" />}
               <span className="text-xs text-slate-700">FVG Mitigation</span>
             </label>
+            <label className="flex items-center gap-2 cursor-pointer group" onClick={() => toggleTag("breakerBlock")}>
+              {tags.breakerBlock ? <CheckSquare className="size-4 text-sky-500" /> : <Square className="size-4 text-slate-300 group-hover:text-slate-400" />}
+              <span className="text-xs text-slate-700">Breaker Block</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer group" onClick={() => toggleTag("idm")}>
+              {tags.idm ? <CheckSquare className="size-4 text-sky-500" /> : <Square className="size-4 text-slate-300 group-hover:text-slate-400" />}
+              <span className="text-xs text-slate-700">Inducement (IDM)</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer group" onClick={() => toggleTag("bos")}>
+              {tags.bos ? <CheckSquare className="size-4 text-sky-500" /> : <Square className="size-4 text-slate-300 group-hover:text-slate-400" />}
+              <span className="text-xs text-slate-700">BOS / Micro-BOS</span>
+            </label>
           </div>
 
           <div className="pt-3 border-t border-slate-200/60 space-y-2.5">
@@ -352,12 +361,6 @@ export default function SniperEntryForm({ className = "" }: { className?: string
                 {checklist.candleClosed ? <CheckSquare className="size-4 text-sky-500" /> : <Square className="size-4 text-slate-300 group-hover:text-slate-400" />}
               </div>
               <span className="text-xs text-slate-700 font-medium leading-relaxed">Did the setup candle fully close before pulling the trigger?</span>
-            </label>
-            <label className="flex items-start gap-2 cursor-pointer group" onClick={() => toggleChecklist("solidBody")}>
-              <div className="mt-0.5">
-                {checklist.solidBody ? <CheckSquare className="size-4 text-sky-500" /> : <Square className="size-4 text-slate-300 group-hover:text-slate-400" />}
-              </div>
-              <span className="text-xs text-slate-700 font-medium leading-relaxed">Solid body close (No ambiguity)?</span>
             </label>
             <label className="flex items-start gap-2 cursor-pointer group" onClick={() => toggleChecklist("premiumDiscount")}>
               <div className="mt-0.5">
