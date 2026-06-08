@@ -48,6 +48,7 @@ export default function SetupPreviewModal({ isOpen, onClose, onUpdate, trade }: 
   const [editNote, setEditNote] = useState("")
   const [editTitle, setEditTitle] = useState("")
   const [isSaving, setIsSaving] = useState(false)
+  const [isFullScreen, setIsFullScreen] = useState(false)
   
   useEffect(() => {
     setMounted(true)
@@ -233,10 +234,14 @@ export default function SetupPreviewModal({ isOpen, onClose, onUpdate, trade }: 
                     <img 
                       src={trade.contextImgUrl || trade.entryImgUrl || "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=1200&auto=format&fit=crop"} 
                       alt="Chart Setup" 
-                      className="w-full h-full object-cover grayscale-[10%]"
+                      className="w-full h-full object-cover grayscale-[10%] cursor-pointer"
+                      onClick={() => setIsFullScreen(true)}
                     />
-                    <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/10 transition-colors flex items-center justify-center">
-                      <button className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm text-slate-800 font-bold px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
+                    <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/10 transition-colors flex items-center justify-center pointer-events-none">
+                      <button 
+                        onClick={() => setIsFullScreen(true)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm text-slate-800 font-bold px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 pointer-events-auto"
+                      >
                         <ImageIcon className="size-4" />
                         View Full Size
                       </button>
@@ -401,6 +406,27 @@ export default function SetupPreviewModal({ isOpen, onClose, onUpdate, trade }: 
           
         </div>
       </div>
+
+      {/* Full Screen Image Modal */}
+      {isFullScreen && (
+        <div 
+          className="fixed inset-0 z-[10000] flex items-center justify-center p-4 sm:p-6 bg-slate-900/95 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setIsFullScreen(false)}
+        >
+          <button 
+            onClick={() => setIsFullScreen(false)}
+            className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors z-[10001]"
+          >
+            <X className="size-6" />
+          </button>
+          <img 
+            src={trade.contextImgUrl || trade.entryImgUrl || "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=1200&auto=format&fit=crop"} 
+            alt="Chart Setup Full Size" 
+            className="max-w-full max-h-full object-contain rounded-xl shadow-2xl relative z-[10001]"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </>,
     document.body
   )
