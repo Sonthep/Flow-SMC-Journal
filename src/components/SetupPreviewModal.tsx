@@ -134,7 +134,7 @@ export default function SetupPreviewModal({ isOpen, onClose, onUpdate, trade }: 
   const isBuy = trade.dir === "BUY" || trade.dir === "LONG" || trade.direction === "BUY" || !trade.dir
 
   const date = trade.createdAt ? new Date(trade.createdAt) : new Date()
-  const timeString = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+  const timeString = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok', hour12: false })
 
   // Compute tier based on available data
   const setupTier = (() => {

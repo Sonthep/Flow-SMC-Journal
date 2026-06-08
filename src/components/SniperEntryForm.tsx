@@ -11,9 +11,15 @@ export default function SniperEntryForm({ className = "" }: { className?: string
   
   const [asset, setAsset] = useState("XAUUSD")
   const [timeframe, setTimeframe] = useState("M1")
-  const [entryDate, setEntryDate] = useState(() => {
+  const [entryDateOnly, setEntryDateOnly] = useState(() => {
     const now = new Date()
-    return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+    const thaiTime = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + (7 * 3600000))
+    return thaiTime.toISOString().slice(0, 10)
+  })
+  const [entryTimeOnly, setEntryTimeOnly] = useState(() => {
+    const now = new Date()
+    const thaiTime = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + (7 * 3600000))
+    return thaiTime.toISOString().slice(11, 16)
   })
   const [preEmotion, setPreEmotion] = useState("CALM")
   const [duringEmotion, setDuringEmotion] = useState("PATIENT")
@@ -144,7 +150,7 @@ export default function SniperEntryForm({ className = "" }: { className?: string
       title: formData.get("title"),
       asset,
       timeframe,
-      entryDate: new Date(entryDate).toISOString(),
+      entryDate: new Date(`${entryDateOnly}T${entryTimeOnly}+07:00`).toISOString(),
       direction,
       riskPercent: risk,
       session: formData.get("session"),
@@ -218,7 +224,36 @@ export default function SniperEntryForm({ className = "" }: { className?: string
             </div>
             <div>
               <span className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Date & Time</span>
-              <input type="datetime-local" value={entryDate} onChange={e => setEntryDate(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-sky-500" />
+              <div className="flex gap-1.5">
+                <input type="date" value={entryDateOnly} onChange={e => setEntryDateOnly(e.target.value)} className="w-3/5 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-sky-500" />
+                <input 
+                  type="text" 
+                  value={entryTimeOnly} 
+                  onChange={e => {
+                    let val = e.target.value.replace(/[^0-9:]/g, '');
+                    const raw = val.replace(/:/g, '');
+                    if (raw.length >= 3) {
+                      val = raw.slice(0, 2) + ':' + raw.slice(2, 4);
+                    } else {
+                      val = raw;
+                    }
+                    setEntryTimeOnly(val);
+                  }}
+                  onBlur={() => {
+                    if (entryTimeOnly.length === 5) {
+                      const [h, m] = entryTimeOnly.split(':');
+                      let hr = parseInt(h || '0');
+                      let min = parseInt(m || '0');
+                      if (hr > 23) hr = 23;
+                      if (min > 59) min = 59;
+                      setEntryTimeOnly(`${hr.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`);
+                    }
+                  }}
+                  placeholder="HH:MM" 
+                  maxLength={5}
+                  className="w-2/5 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-sky-500 text-center font-mono" 
+                />
+              </div>
             </div>
           </div>
 
