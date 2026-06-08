@@ -10,7 +10,7 @@ export default function SniperEntryForm({ className = "" }: { className?: string
   const [outcome, setOutcome] = useState("PENDING")
   
   const [asset, setAsset] = useState("XAUUSD")
-  const [timeframe, setTimeframe] = useState("M5")
+  const [timeframe, setTimeframe] = useState("M1")
   const [entryDate, setEntryDate] = useState(() => {
     const now = new Date()
     return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
