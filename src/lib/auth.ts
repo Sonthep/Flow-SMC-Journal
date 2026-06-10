@@ -10,6 +10,11 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || "MOCK_GOOGLE_ID",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "MOCK_GOOGLE_SECRET",
+      authorization: {
+        params: {
+          prompt: "consent select_account",
+        },
+      },
     }),
     GitHubProvider({
       clientId: process.env.GITHUB_CLIENT_ID || "MOCK_GITHUB_ID",
