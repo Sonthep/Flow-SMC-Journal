@@ -348,9 +348,11 @@ export default function SniperEntryForm({ className = "" }: { className?: string
             <div className="ml-auto flex items-center gap-2">
               <span className="font-medium text-slate-500">Session:</span>
               <select name="session" className="bg-slate-50 border border-slate-200 rounded px-2 py-1 text-slate-800 focus:outline-none focus:border-sky-500 cursor-pointer">
-                <option value="LONDON">London</option>
-                <option value="NY">New York</option>
                 <option value="ASIA">Asia</option>
+                <option value="LONDON">London</option>
+                <option value="NY_AM">NY AM</option>
+                <option value="NY_LUNCH">NY Lunch</option>
+                <option value="NY_PM">NY PM</option>
               </select>
             </div>
           </div>

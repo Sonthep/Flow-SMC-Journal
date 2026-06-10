@@ -419,7 +419,7 @@ export default function JournalPage() {
                         </div>
                         <div className="p-4 flex flex-col gap-3 flex-1">
                           <div className="text-[11px] text-slate-500 font-medium">
-                            {timeStr} • {trade.session || 'LONDON'}
+                            {timeStr} • {(trade.session || 'LONDON').replace('_', ' ')}
                           </div>
                           <div className="flex flex-wrap gap-1.5">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${isWin ? 'bg-emerald-100 text-emerald-700' : isLoss ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'}`}>

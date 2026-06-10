@@ -76,7 +76,7 @@ export default function TradesTable({ recentTrades, isLoading, onRefresh }: Prop
                     <div className="flex flex-col justify-center">
                       <div className="flex items-center gap-2">
                         <span className="font-black text-slate-800 tracking-tight">{trade.pair || 'XAUUSD'}</span>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1.5 py-0.5 bg-slate-100 rounded">{timeString} • {trade.session || 'LONDON'} • {isBuy ? 'LONG' : 'SHORT'}</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1.5 py-0.5 bg-slate-100 rounded">{timeString} • {(trade.session || 'LONDON').replace('_', ' ')} • {isBuy ? 'LONG' : 'SHORT'}</span>
                       </div>
                       {trade.title && (
                         <div className="text-sm font-bold text-slate-700 mt-0.5 truncate max-w-[250px] md:max-w-[350px]">

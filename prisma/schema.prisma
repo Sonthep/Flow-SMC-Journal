@@ -64,6 +64,9 @@ enum SessionType {
   ASIA
   LONDON
   NY
+  NY_AM
+  NY_LUNCH
+  NY_PM
 }
 
 enum Direction {
