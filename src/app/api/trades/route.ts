@@ -41,7 +41,8 @@ export async function POST(request: Request) {
         duringEmotion: body.duringEmotion || 'PATIENT',
         exitReason: body.outcome === 'WIN' ? 'HIT_TP' : body.outcome === 'LOSS' || body.outcome === 'BE' ? 'HIT_SL' : 'RUNNING',
         journalNote: body.narrative || '',
-        contextImgUrl: body.imageUrl || null,
+        contextImgUrl: body.imageUrls && body.imageUrls.length > 0 ? body.imageUrls[0] : (body.imageUrl || null),
+        imageUrls: body.imageUrls || (body.imageUrl ? [body.imageUrl] : []),
       }
     })
 

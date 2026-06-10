@@ -23,6 +23,7 @@ interface Trade {
   tp?: string
   contextImgUrl?: string | null
   entryImgUrl?: string | null
+  imageUrls?: string[]
   pair?: string
   title?: string | null
   journalNote?: string
@@ -49,6 +50,7 @@ export default function SetupPreviewModal({ isOpen, onClose, onUpdate, trade }: 
   const [editTitle, setEditTitle] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [isFullScreen, setIsFullScreen] = useState(false)
+  const [fullScreenImg, setFullScreenImg] = useState<string>("")
   
   useEffect(() => {
     setMounted(true)
@@ -229,24 +231,58 @@ export default function SetupPreviewModal({ isOpen, onClose, onUpdate, trade }: 
               <div className="lg:col-span-2 space-y-8">
                 
                 {/* Screenshot Area */}
-                <div className="bg-white p-2 border border-slate-200 rounded-2xl shadow-sm">
-                  <div className="bg-slate-100 rounded-xl aspect-[16/9] w-full relative overflow-hidden group">
-                    <img 
-                      src={trade.contextImgUrl || trade.entryImgUrl || "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=1200&auto=format&fit=crop"} 
-                      alt="Chart Setup" 
-                      className="w-full h-full object-cover grayscale-[10%] cursor-pointer"
-                      onClick={() => setIsFullScreen(true)}
-                    />
-                    <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/10 transition-colors flex items-center justify-center pointer-events-none">
-                      <button 
-                        onClick={() => setIsFullScreen(true)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm text-slate-800 font-bold px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 pointer-events-auto"
-                      >
-                        <ImageIcon className="size-4" />
-                        View Full Size
-                      </button>
+                <div className="bg-white p-2 border border-slate-200 rounded-2xl shadow-sm flex flex-col gap-3">
+                  {(trade.imageUrls && trade.imageUrls.length > 0) ? (
+                    trade.imageUrls.map((url, idx) => (
+                      <div key={idx} className="bg-slate-100 rounded-xl aspect-[16/9] w-full relative overflow-hidden group">
+                        <img 
+                          src={url} 
+                          alt={`Chart Setup ${idx + 1}`} 
+                          className="w-full h-full object-cover grayscale-[10%] cursor-pointer hover:grayscale-0 transition-all duration-300"
+                          onClick={() => {
+                            setFullScreenImg(url);
+                            setIsFullScreen(true);
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/10 transition-colors flex items-center justify-center pointer-events-none">
+                          <button 
+                            onClick={() => {
+                              setFullScreenImg(url);
+                              setIsFullScreen(true);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm text-slate-800 font-bold px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 pointer-events-auto"
+                          >
+                            <ImageIcon className="size-4" />
+                            View Full Size
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="bg-slate-100 rounded-xl aspect-[16/9] w-full relative overflow-hidden group">
+                      <img 
+                        src={trade.contextImgUrl || trade.entryImgUrl || "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=1200&auto=format&fit=crop"} 
+                        alt="Chart Setup" 
+                        className="w-full h-full object-cover grayscale-[10%] cursor-pointer hover:grayscale-0 transition-all duration-300"
+                        onClick={() => {
+                          setFullScreenImg(trade.contextImgUrl || trade.entryImgUrl || "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=1200&auto=format&fit=crop");
+                          setIsFullScreen(true);
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/10 transition-colors flex items-center justify-center pointer-events-none">
+                        <button 
+                          onClick={() => {
+                            setFullScreenImg(trade.contextImgUrl || trade.entryImgUrl || "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=1200&auto=format&fit=crop");
+                            setIsFullScreen(true);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm text-slate-800 font-bold px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 pointer-events-auto"
+                        >
+                          <ImageIcon className="size-4" />
+                          View Full Size
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Narrative */}
@@ -416,7 +452,7 @@ export default function SetupPreviewModal({ isOpen, onClose, onUpdate, trade }: 
             <X className="size-6" />
           </button>
           <img 
-            src={trade.contextImgUrl || trade.entryImgUrl || "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?q=80&w=1200&auto=format&fit=crop"} 
+            src={fullScreenImg} 
             alt="Chart Setup Full Size" 
             className="max-w-full max-h-full object-contain rounded-xl shadow-2xl relative z-[10001]"
             onClick={(e) => e.stopPropagation()}

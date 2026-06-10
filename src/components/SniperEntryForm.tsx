@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Target, CheckSquare, Square, Lock, CloudUpload, Trophy, Loader2, X as XIcon, ImageIcon } from "lucide-react"
+import { Target, CheckSquare, Square, Lock, CloudUpload, Trophy, Loader2, X as XIcon, ImageIcon, Calendar } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
 export default function SniperEntryForm({ className = "" }: { className?: string }) {
@@ -11,10 +11,13 @@ export default function SniperEntryForm({ className = "" }: { className?: string
   
   const [asset, setAsset] = useState("XAUUSD")
   const [timeframe, setTimeframe] = useState("M1")
-  const [entryDateOnly, setEntryDateOnly] = useState(() => {
+  const [entryDateDisplay, setEntryDateDisplay] = useState(() => {
     const now = new Date()
     const thaiTime = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + (7 * 3600000))
-    return thaiTime.toISOString().slice(0, 10)
+    const d = thaiTime.getDate().toString().padStart(2, '0')
+    const m = (thaiTime.getMonth() + 1).toString().padStart(2, '0')
+    const y = thaiTime.getFullYear()
+    return `${d}/${m}/${y}`
   })
   const [entryTimeOnly, setEntryTimeOnly] = useState(() => {
     const now = new Date()
@@ -64,20 +67,22 @@ export default function SniperEntryForm({ className = "" }: { className?: string
   const [submitSuccess, setSubmitSuccess] = useState(false)
   
   // Image Upload State
-  const [file, setFile] = useState<File | null>(null)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [files, setFiles] = useState<File[]>([])
+  const [previewUrls, setPreviewUrls] = useState<string[]>([])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const selectedFile = e.target.files[0]
-      setFile(selectedFile)
-      setPreviewUrl(URL.createObjectURL(selectedFile))
+    if (e.target.files && e.target.files.length > 0) {
+      const newFiles = Array.from(e.target.files)
+      setFiles(prev => [...prev, ...newFiles])
+      
+      const newUrls = newFiles.map(f => URL.createObjectURL(f))
+      setPreviewUrls(prev => [...prev, ...newUrls])
     }
   }
 
-  const removeImage = () => {
-    setFile(null)
-    setPreviewUrl(null)
+  const removeImage = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index))
+    setPreviewUrls(prev => prev.filter((_, i) => i !== index))
   }
 
   const handlePaste = (e: React.ClipboardEvent) => {
@@ -88,8 +93,8 @@ export default function SniperEntryForm({ className = "" }: { className?: string
       if (items[i].type.indexOf("image") !== -1) {
         const pastedFile = items[i].getAsFile();
         if (pastedFile) {
-          setFile(pastedFile);
-          setPreviewUrl(URL.createObjectURL(pastedFile));
+          setFiles(prev => [...prev, pastedFile]);
+          setPreviewUrls(prev => [...prev, URL.createObjectURL(pastedFile)]);
         }
         break;
       }
@@ -120,30 +125,42 @@ export default function SniperEntryForm({ className = "" }: { className?: string
     setIsSubmitting(true);
     setSubmitSuccess(false);
 
-    let imageUrl = null;
+    let imageUrls: string[] = [];
 
-    // Upload image to Supabase if exists
-    if (file) {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
-      
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('trade-images')
-        .upload(`public/${fileName}`, file);
-
-      if (uploadError) {
-        console.error("Image upload failed:", uploadError);
-        alert(`Image upload failed: ${uploadError.message}`);
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Get public URL
-      const { data: publicUrlData } = supabase.storage
-        .from('trade-images')
-        .getPublicUrl(`public/${fileName}`);
+    // Upload images to Supabase if exist
+    if (files.length > 0) {
+      for (const f of files) {
+        const fileExt = f.name.split('.').pop();
+        const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
         
-      imageUrl = publicUrlData.publicUrl;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('trade-images')
+          .upload(`public/${fileName}`, f);
+
+        if (uploadError) {
+          console.error("Image upload failed:", uploadError);
+          alert(`Image upload failed: ${uploadError.message}`);
+          setIsSubmitting(false);
+          return;
+        }
+
+        // Get public URL
+        const { data: publicUrlData } = supabase.storage
+          .from('trade-images')
+          .getPublicUrl(`public/${fileName}`);
+          
+        imageUrls.push(publicUrlData.publicUrl);
+      }
+    }
+
+    let entryDateOnly = "";
+    if (entryDateDisplay.length === 10) {
+      const [d, m, y] = entryDateDisplay.split('/');
+      entryDateOnly = `${y}-${m}-${d}`;
+    } else {
+      const now = new Date()
+      const thaiTime = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + (7 * 3600000))
+      entryDateOnly = thaiTime.toISOString().slice(0, 10);
     }
 
     const data = {
@@ -161,7 +178,7 @@ export default function SniperEntryForm({ className = "" }: { className?: string
       outcome,
       tags,
       checklist,
-      imageUrl,
+      imageUrls,
       preEmotion,
       duringEmotion
     };
@@ -225,7 +242,51 @@ export default function SniperEntryForm({ className = "" }: { className?: string
             <div>
               <span className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Date & Time</span>
               <div className="flex gap-1.5">
-                <input type="date" value={entryDateOnly} onChange={e => setEntryDateOnly(e.target.value)} className="w-3/5 bg-slate-50 border border-slate-200 rounded px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-sky-500" />
+                <div className="relative w-3/5">
+                  <input 
+                    type="text" 
+                    value={entryDateDisplay} 
+                    onChange={e => {
+                      let val = e.target.value.replace(/[^0-9/]/g, '');
+                      const raw = val.replace(/\//g, '');
+                      if (raw.length >= 5) {
+                        val = raw.slice(0, 2) + '/' + raw.slice(2, 4) + '/' + raw.slice(4, 8);
+                      } else if (raw.length >= 3) {
+                        val = raw.slice(0, 2) + '/' + raw.slice(2, 4);
+                      } else {
+                        val = raw;
+                      }
+                      setEntryDateDisplay(val);
+                    }}
+                    onBlur={() => {
+                      if (entryDateDisplay.length === 10) {
+                        const [d, m, y] = entryDateDisplay.split('/');
+                        let day = parseInt(d || '1');
+                        let month = parseInt(m || '1');
+                        let year = parseInt(y || new Date().getFullYear().toString());
+                        if (day > 31) day = 31;
+                        if (month > 12) month = 12;
+                        setEntryDateDisplay(`${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year}`);
+                      }
+                    }}
+                    placeholder="DD/MM/YYYY"
+                    maxLength={10}
+                    className="w-full bg-slate-50 border border-slate-200 rounded px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-sky-500 text-center font-mono pr-7" 
+                  />
+                  <input 
+                    type="date"
+                    value={entryDateDisplay.length === 10 ? `${entryDateDisplay.split('/')[2]}-${entryDateDisplay.split('/')[1]}-${entryDateDisplay.split('/')[0]}` : ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val) {
+                        const [y, m, d] = val.split('-');
+                        setEntryDateDisplay(`${d}/${m}/${y}`);
+                      }
+                    }}
+                    className="absolute right-0 top-0 bottom-0 w-8 opacity-0 cursor-pointer z-10"
+                  />
+                  <Calendar className="size-3.5 absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
                 <input 
                   type="text" 
                   value={entryTimeOnly} 
@@ -455,25 +516,29 @@ export default function SniperEntryForm({ className = "" }: { className?: string
         <div>
           <h3 className="text-[11px] font-bold text-slate-500 mb-3 uppercase tracking-wider">CHART SETUP IMAGE</h3>
           
-          {previewUrl ? (
-            <div className="relative border border-slate-200 rounded-xl overflow-hidden bg-slate-100 group">
-              <img src={previewUrl} alt="Setup Preview" className="w-full h-auto max-h-[300px] object-cover" />
-              <button 
-                type="button" 
-                onClick={removeImage}
-                className="absolute top-3 right-3 bg-white/90 backdrop-blur text-rose-500 hover:text-rose-600 p-2 rounded-lg shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <XIcon className="size-4" />
-              </button>
+          {previewUrls.length > 0 && (
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              {previewUrls.map((url, i) => (
+                <div key={i} className="relative border border-slate-200 rounded-xl overflow-hidden bg-slate-100 group aspect-video">
+                  <img src={url} alt={`Setup Preview ${i+1}`} className="w-full h-full object-cover" />
+                  <button 
+                    type="button" 
+                    onClick={() => removeImage(i)}
+                    className="absolute top-2 right-2 bg-white/90 backdrop-blur text-rose-500 hover:text-rose-600 p-1.5 rounded-lg shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <XIcon className="size-4" />
+                  </button>
+                </div>
+              ))}
             </div>
-          ) : (
-            <label className="border-2 border-dashed border-slate-200 rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-slate-50 hover:border-sky-300 transition-colors bg-white group">
-              <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-              <CloudUpload className="size-6 text-sky-400 mb-2 group-hover:scale-110 transition-transform" strokeWidth={2} />
-              <p className="text-xs font-semibold text-slate-700">Click to upload or drag screenshot</p>
-              <p className="text-[10px] text-slate-400 mt-1">PNG, JPG or WebP up to 10MB</p>
-            </label>
           )}
+
+          <label className="border-2 border-dashed border-slate-200 rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-slate-50 hover:border-sky-300 transition-colors bg-white group">
+            <input type="file" accept="image/*" multiple className="hidden" onChange={handleFileChange} />
+            <CloudUpload className="size-6 text-sky-400 mb-2 group-hover:scale-110 transition-transform" strokeWidth={2} />
+            <p className="text-xs font-semibold text-slate-700">Click to upload or drag screenshot</p>
+            <p className="text-[10px] text-slate-400 mt-1">PNG, JPG or WebP up to 10MB</p>
+          </label>
         </div>
 
         <div className="mt-auto pt-2">

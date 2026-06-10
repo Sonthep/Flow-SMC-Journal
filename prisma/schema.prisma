@@ -148,6 +148,7 @@ model TradeLog {
   // Imagery
   contextImgUrl String?
   entryImgUrl   String?
+  imageUrls     String[] @default([])
   
   // Psychological Factors
   preEmotion    Emotion
