@@ -24,7 +24,7 @@ export function useToast() {
 
 function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) => void }) {
   const [visible, setVisible] = useState(false)
-  const timerRef = useRef<ReturnType<typeof setTimeout>>()
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     // Animate in
@@ -34,7 +34,7 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) =
       setVisible(false)
       setTimeout(() => onRemove(toast.id), 300)
     }, 3500)
-    return () => { clearTimeout(t); clearTimeout(timerRef.current) }
+    return () => { clearTimeout(t); if (timerRef.current) clearTimeout(timerRef.current) }
   }, [])
 
   const styles = {
