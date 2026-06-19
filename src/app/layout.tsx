@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import { Providers } from "@/components/Providers";
+import { ToastProvider } from "@/components/Toast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,10 +32,12 @@ export default function RootLayout({
     >
       <body className="min-h-full flex bg-[#f4f7fb] text-slate-800 selection:bg-sky-500/30">
         <Providers>
-          <Sidebar />
-          <div className="flex-1 flex flex-col h-screen overflow-hidden">
-            {children}
-          </div>
+          <ToastProvider>
+            <Sidebar />
+            <div className="flex-1 flex flex-col h-screen overflow-hidden">
+              {children}
+            </div>
+          </ToastProvider>
         </Providers>
       </body>
     </html>

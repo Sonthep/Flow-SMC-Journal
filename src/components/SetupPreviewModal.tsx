@@ -2,12 +2,15 @@
 import { useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { X, Target, Image as ImageIcon, CheckSquare, Clock, ArrowRight } from "lucide-react"
+import { useToast } from "@/components/Toast"
 
 interface Trade {
   id?: string
   asset?: string
   time?: string
   tf?: string
+  timeframe?: string
+  session?: string
   tags?: string[]
   rr?: string
   outcome?: string
@@ -32,6 +35,8 @@ interface Trade {
   sweepType?: string
   entryZone?: string
   valueZone?: string
+  preEmotion?: string
+  duringEmotion?: string
 }
 
 interface Props {
@@ -42,6 +47,7 @@ interface Props {
 }
 
 export default function SetupPreviewModal({ isOpen, onClose, onUpdate, trade }: Props) {
+  const { toast } = useToast()
   const [mounted, setMounted] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editOutcome, setEditOutcome] = useState("PENDING")
@@ -98,32 +104,34 @@ export default function SetupPreviewModal({ isOpen, onClose, onUpdate, trade }: 
       });
       if (res.ok) {
         setIsEditing(false);
+        toast("Trade updated successfully!", "success");
         if (onUpdate) onUpdate();
       } else {
-        alert("Failed to update trade");
+        toast("Failed to update trade", "error");
       }
     } catch (e) {
       console.error(e);
-      alert("Error updating trade");
+      toast("Error updating trade", "error");
     } finally {
       setIsSaving(false);
     }
   }
 
   const handleDelete = async () => {
-    if (!trade?.id || !confirm("Are you sure you want to delete this trade?")) return;
+    if (!trade?.id) return;
     setIsSaving(true);
     try {
       const res = await fetch(`/api/trades/${trade.id}`, { method: 'DELETE' });
       if (res.ok) {
+        toast("Trade deleted", "info");
         if (onUpdate) onUpdate();
         onClose();
       } else {
-        alert("Failed to delete trade");
+        toast("Failed to delete trade", "error");
       }
     } catch (e) {
       console.error(e);
-      alert("Error deleting trade");
+      toast("Error deleting trade", "error");
     } finally {
       setIsSaving(false);
     }
@@ -379,23 +387,37 @@ export default function SetupPreviewModal({ isOpen, onClose, onUpdate, trade }: 
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                     <Target className="size-4" /> Execution Details
                   </h3>
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     <div className="flex justify-between items-center pb-3 border-b border-slate-100">
                       <span className="text-sm text-slate-500 font-medium">Entry Price</span>
-                      <span className="text-sm font-bold text-slate-800">{trade.entryPrice || trade.entry || '1.08450'}</span>
+                      <span className="text-sm font-bold text-slate-800 tabular-nums">{trade.entryPrice || trade.entry || '—'}</span>
                     </div>
                     <div className="flex justify-between items-center pb-3 border-b border-slate-100">
                       <span className="text-sm text-slate-500 font-medium">Stop Loss</span>
-                      <span className="text-sm font-bold text-rose-500">{trade.stopLoss || trade.sl || '1.08300'}</span>
+                      <span className="text-sm font-bold text-rose-500 tabular-nums">{trade.stopLoss || trade.sl || '—'}</span>
                     </div>
                     <div className="flex justify-between items-center pb-3 border-b border-slate-100">
                       <span className="text-sm text-slate-500 font-medium">Take Profit</span>
-                      <span className="text-sm font-bold text-emerald-500">{trade.takeProfit || trade.tp || '1.08850'}</span>
+                      <span className="text-sm font-bold text-emerald-500 tabular-nums">{trade.takeProfit || trade.tp || '—'}</span>
                     </div>
-                    <div className="flex justify-between items-center pt-2">
+                    <div className="flex justify-between items-center pb-3 border-b border-slate-100">
                       <span className="text-sm text-slate-500 font-medium">Risk</span>
                       <span className="text-sm font-bold text-slate-800">{trade.riskPercent || '0.5'}%</span>
                     </div>
+                    {trade.session && (
+                      <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                        <span className="text-sm text-slate-500 font-medium">Session</span>
+                        <span className="text-sm font-bold text-violet-600 bg-violet-50 px-2 py-0.5 rounded-md">
+                          {trade.session.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                    )}
+                    {(trade.timeframe || trade.tf) && (
+                      <div className="flex justify-between items-center pt-1">
+                        <span className="text-sm text-slate-500 font-medium">Timeframe</span>
+                        <span className="text-sm font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">{trade.timeframe || trade.tf}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -408,7 +430,7 @@ export default function SetupPreviewModal({ isOpen, onClose, onUpdate, trade }: 
                       if (trade.tags) return trade.tags;
                       if (trade.hasChoch) tags.push("CHOCH")
                       if (trade.entryZone) tags.push(trade.entryZone)
-                      if (trade.sweepType) tags.push(trade.sweepType.replace('_', ' '))
+                      if (trade.sweepType) tags.push(trade.sweepType.replace(/_/g, ' '))
                       if (trade.valueZone) tags.push(trade.valueZone)
                       return tags.length > 0 ? tags : ['NO TAGS']
                     })().map(tag => (
@@ -418,15 +440,40 @@ export default function SetupPreviewModal({ isOpen, onClose, onUpdate, trade }: 
                     ))}
                   </div>
 
+                  {/* Psychology / Emotions */}
+                  {(trade.preEmotion || trade.duringEmotion) && (
+                    <div className="border-t border-slate-100 pt-4 mb-4">
+                      <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Psychology</h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        {trade.preEmotion && (
+                          <div className="bg-slate-50 rounded-xl p-3 text-center">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Before</p>
+                            <p className="text-sm font-bold text-slate-700">{trade.preEmotion}</p>
+                          </div>
+                        )}
+                        {trade.duringEmotion && (
+                          <div className="bg-slate-50 rounded-xl p-3 text-center">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">During</p>
+                            <p className="text-sm font-bold text-slate-700">{trade.duringEmotion}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 border-t border-slate-100 pt-4">Discipline Checklist</h3>
                   <div className="space-y-3">
                     <div className="flex items-start gap-2">
-                      <CheckSquare className="size-4 text-emerald-500 mt-0.5 shrink-0" />
-                      <span className="text-xs font-medium text-slate-700">Setup candle fully closed</span>
+                      <CheckSquare className={`size-4 mt-0.5 shrink-0 ${trade.hasChoch ? 'text-emerald-500' : 'text-slate-200'}`} />
+                      <span className={`text-xs font-medium ${trade.hasChoch ? 'text-slate-700' : 'text-slate-400 line-through'}`}>CHoCH confirmed before entry</span>
                     </div>
-                    <div className="flex items-start gap-2 opacity-50">
-                      <div className="size-4 border-2 border-slate-300 rounded mt-0.5 shrink-0"></div>
-                      <span className="text-xs font-medium text-slate-500 line-through">Waited for HTF alignment</span>
+                    <div className="flex items-start gap-2">
+                      <CheckSquare className={`size-4 mt-0.5 shrink-0 ${trade.entryZone ? 'text-emerald-500' : 'text-slate-200'}`} />
+                      <span className={`text-xs font-medium ${trade.entryZone ? 'text-slate-700' : 'text-slate-400 line-through'}`}>Entry zone identified ({trade.entryZone?.replace(/_/g, ' ') || '—'})</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <CheckSquare className={`size-4 mt-0.5 shrink-0 ${(trade.valueZone === 'DISCOUNT' || trade.valueZone === 'PREMIUM') ? 'text-emerald-500' : 'text-slate-200'}`} />
+                      <span className={`text-xs font-medium ${(trade.valueZone === 'DISCOUNT' || trade.valueZone === 'PREMIUM') ? 'text-slate-700' : 'text-slate-400 line-through'}`}>Correct Premium/Discount zone</span>
                     </div>
                   </div>
                 </div>

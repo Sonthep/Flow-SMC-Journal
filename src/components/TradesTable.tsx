@@ -14,14 +14,9 @@ export default function TradesTable({ recentTrades, isLoading, onRefresh }: Prop
 
   return (
     <div className="bg-white rounded-[1.5rem] p-6 flex flex-col h-full shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <ScrollText className="size-5 text-sky-500" strokeWidth={2.5} />
-          <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">RECENT TRADES STREAM</h2>
-        </div>
-        <button className="text-sky-500 text-xs font-bold hover:text-sky-600 transition-colors">
-          [View All]
-        </button>
+      <div className="flex items-center gap-2 mb-6">
+        <ScrollText className="size-5 text-sky-500" strokeWidth={2.5} />
+        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">RECENT TRADES STREAM</h2>
       </div>
 
       <div className="flex-1 overflow-auto pr-2">

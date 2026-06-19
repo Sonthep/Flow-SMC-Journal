@@ -3,8 +3,10 @@
 import { useState, useMemo } from "react"
 import { Target, CheckSquare, Square, Lock, CloudUpload, Trophy, Loader2, X as XIcon, ImageIcon, Calendar } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { useToast } from "@/components/Toast"
 
 export default function SniperEntryForm({ className = "" }: { className?: string }) {
+  const { toast } = useToast()
   const [direction, setDirection] = useState("BUY")
   const [risk, setRisk] = useState("0.5")
   const [outcome, setOutcome] = useState("PENDING")
@@ -27,9 +29,9 @@ export default function SniperEntryForm({ className = "" }: { className?: string
   const [preEmotion, setPreEmotion] = useState("CALM")
   const [duringEmotion, setDuringEmotion] = useState("PATIENT")
   
-  const [entryPrice, setEntryPrice] = useState("4445.50")
-  const [stopLoss, setStopLoss] = useState("4444.30")
-  const [takeProfit, setTakeProfit] = useState("4451.30")
+  const [entryPrice, setEntryPrice] = useState("")
+  const [stopLoss, setStopLoss] = useState("")
+  const [takeProfit, setTakeProfit] = useState("")
 
   const pips = useMemo(() => {
     const ep = parseFloat(entryPrice)
@@ -65,6 +67,7 @@ export default function SniperEntryForm({ className = "" }: { className?: string
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
+  const [validationError, setValidationError] = useState("")
   
   // Image Upload State
   const [files, setFiles] = useState<File[]>([])
@@ -121,6 +124,31 @@ export default function SniperEntryForm({ className = "" }: { className?: string
     
     // Capture form data synchronously before any async operations
     const formData = new FormData(e.currentTarget);
+
+    // --- Validation ---
+    const ep = parseFloat(entryPrice);
+    const sl = parseFloat(stopLoss);
+    const tp = parseFloat(takeProfit);
+
+    if (!entryPrice || !stopLoss || !takeProfit || isNaN(ep) || isNaN(sl) || isNaN(tp)) {
+      setValidationError("กรุณากรอก Entry, SL และ TP ให้ครบ"); return;
+    }
+    if (ep === sl) {
+      setValidationError("Entry Price และ Stop Loss ต้องไม่เท่ากัน"); return;
+    }
+    if (direction === "BUY" && sl >= ep) {
+      setValidationError("BUY: Stop Loss ต้องต่ำกว่า Entry Price"); return;
+    }
+    if (direction === "SELL" && sl <= ep) {
+      setValidationError("SELL: Stop Loss ต้องสูงกว่า Entry Price"); return;
+    }
+    if (direction === "BUY" && tp <= ep) {
+      setValidationError("BUY: Take Profit ต้องสูงกว่า Entry Price"); return;
+    }
+    if (direction === "SELL" && tp >= ep) {
+      setValidationError("SELL: Take Profit ต้องต่ำกว่า Entry Price"); return;
+    }
+    setValidationError("");
     
     setIsSubmitting(true);
     setSubmitSuccess(false);
@@ -139,7 +167,7 @@ export default function SniperEntryForm({ className = "" }: { className?: string
 
         if (uploadError) {
           console.error("Image upload failed:", uploadError);
-          alert(`Image upload failed: ${uploadError.message}`);
+          toast(`Image upload failed: ${uploadError.message}`, "error");
           setIsSubmitting(false);
           return;
         }
@@ -191,15 +219,28 @@ export default function SniperEntryForm({ className = "" }: { className?: string
       });
       if (res.ok) {
         setSubmitSuccess(true);
-        // Optionally reset form here
+        toast("Trade saved successfully!", "success");
+        // Reset form
+        setDirection("BUY");
+        setRisk("0.5");
+        setOutcome("PENDING");
+        setEntryPrice("");
+        setStopLoss("");
+        setTakeProfit("");
+        setPreEmotion("CALM");
+        setDuringEmotion("PATIENT");
+        setTags({ extSweep: false, intSweep: false, chochWick: false, microChoch: false, freshOb: false, fvgMitigation: false, breakerBlock: false, idm: false, bos: false });
+        setChecklist({ candleClosed: false, premiumDiscount: false });
+        setFiles([]);
+        setPreviewUrls([]);
         setTimeout(() => setSubmitSuccess(false), 3000);
       } else {
         const errData = await res.json();
-        alert(`Failed to save trade: ${errData.error}`);
+        toast(`Failed to save trade: ${errData.error}`, "error");
       }
     } catch (err) {
       console.error(err);
-      alert("Error submitting trade.");
+      toast("Error submitting trade.", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -543,7 +584,12 @@ export default function SniperEntryForm({ className = "" }: { className?: string
           </label>
         </div>
 
-        <div className="mt-auto pt-2">
+        <div className="mt-auto pt-2 flex flex-col gap-2">
+          {validationError && (
+            <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold px-4 py-2.5 rounded-xl">
+              <span>⚠</span> {validationError}
+            </div>
+          )}
           <button 
             type="submit" 
             disabled={isSubmitting}

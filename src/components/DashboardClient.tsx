@@ -1,5 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import MetricsGrid from "./MetricsGrid"
 import EquityCurveChart from "./EquityCurveChart"
 import WinLossPieChart from "./WinLossPieChart"
@@ -100,6 +101,23 @@ export default function DashboardClient() {
     }
   })
 
+  // Profit Factor = Gross Win / Gross Loss
+  const grossWin = finishedTrades.filter(t => (t.realizedRR || 0) > 0).reduce((acc, t) => acc + (t.realizedRR || 0), 0)
+  const grossLoss = Math.abs(finishedTrades.filter(t => (t.realizedRR || 0) < 0).reduce((acc, t) => acc + (t.realizedRR || 0), 0))
+  const profitFactor = grossLoss === 0 ? (grossWin > 0 ? Infinity : 0) : grossWin / grossLoss
+
+  // Best Session (highest win rate, min 2 trades)
+  const sessionStats: Record<string, { wins: number; total: number }> = {}
+  finishedTrades.forEach(t => {
+    const s = t.session || 'UNKNOWN'
+    if (!sessionStats[s]) sessionStats[s] = { wins: 0, total: 0 }
+    sessionStats[s].total++
+    if (t.outcome === 'WIN') sessionStats[s].wins++
+  })
+  const bestSession = Object.entries(sessionStats)
+    .filter(([, v]) => v.total >= 2)
+    .sort(([, a], [, b]) => (b.wins / b.total) - (a.wins / a.total))[0]?.[0] || undefined
+
   return (
     <>
       <div className="mb-6">
@@ -107,7 +125,10 @@ export default function DashboardClient() {
           winRate={winRate} 
           totalR={totalR} 
           avgRR={avgRR} 
-          maxLosingStreak={maxLosingStreak} 
+          maxLosingStreak={maxLosingStreak}
+          totalTrades={trades.length}
+          profitFactor={profitFactor}
+          bestSession={bestSession}
         />
       </div>
       
@@ -130,12 +151,12 @@ export default function DashboardClient() {
       <div className="bg-white rounded-[1.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden mb-10">
         <div className="p-6 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Recent Executions</h2>
-          <button className="text-xs font-bold text-sky-500 hover:text-sky-600 uppercase tracking-wider transition-colors">
-            View All
-          </button>
+          <Link href="/journal" className="text-xs font-bold text-sky-500 hover:text-sky-600 uppercase tracking-wider transition-colors">
+            View All →
+          </Link>
         </div>
         <div className="p-6">
-          <TradesTable recentTrades={trades} isLoading={isLoading} onRefresh={fetchData} />
+          <TradesTable recentTrades={trades.slice(0, 5)} isLoading={isLoading} onRefresh={fetchData} />
         </div>
       </div>
     </>

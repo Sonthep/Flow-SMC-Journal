@@ -28,6 +28,13 @@ export const authOptions: NextAuthOptions = {
     signIn: "/login",
   },
   callbacks: {
+    async jwt({ token, user }) {
+      // The user object is only passed on the initial sign-in
+      if (user) {
+        token.sub = user.id;
+      }
+      return token;
+    },
     async session({ session, token }) {
       if (session.user && token.sub) {
         ;(session.user as any).id = token.sub;
