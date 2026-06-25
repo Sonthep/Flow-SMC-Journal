@@ -673,6 +673,8 @@ export interface Trade {
   openIndex: number;
   closeIndex?: number;
   pnl?: number;
+  timestamp?: number;
+  screenshotUrl?: string;
 }
 
 // ─── Dark theme for klinecharts ───────────────────────────────────────────────
