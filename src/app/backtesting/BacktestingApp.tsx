@@ -6,7 +6,7 @@ import {
   Play, SkipForward, Pause, Upload, FileText,
   Crosshair, Minus, Square, TrendingUp, Trash2,
   Undo2, ZoomIn, ZoomOut, Moon, Sun, ChevronLeft,
-  ChevronRight, BarChart2, Type, Lock, Unlock
+  ChevronRight, BarChart2, Type, Lock, Unlock, Calendar, X
 } from "lucide-react"
 import { init, dispose, Chart, KLineData, registerOverlay, registerIndicator } from "klinecharts"
 import * as htmlToImage from "html-to-image"
@@ -753,6 +753,33 @@ export default function BacktestingPage() {
   const [tradeToLog, setTradeToLog] = useState<any>(null)
 
   // Keep refs in sync with state
+  const [showGoTo, setShowGoTo] = useState(false)
+  const [goToDate, setGoToDate] = useState("")
+  const [goToTime, setGoToTime] = useState("")
+
+  const handleGoTo = () => {
+    if (!goToDate || fullData.length === 0) return
+    const targetDateStr = goToTime ? `${goToDate}T${goToTime}` : `${goToDate}T00:00`
+    const targetTimestampShifted = new Date(targetDateStr).getTime()
+    if (isNaN(targetTimestampShifted)) return
+    
+    // Convert typed local time back to unshifted time matching CSV
+    const targetTimestampOriginal = targetTimestampShifted - (kzOffset * 60 * 60 * 1000)
+
+    let closestIndex = 100
+    let minDiff = Infinity
+    for (let i = 100; i < fullData.length; i++) {
+      const diff = Math.abs(fullData[i].timestamp - targetTimestampOriginal)
+      if (diff < minDiff) {
+        minDiff = diff
+        closestIndex = i
+      }
+    }
+    
+    setCurrentIndex(closestIndex)
+    setShowGoTo(false)
+  }
+
   useEffect(() => { currentIndexRef.current = currentIndex }, [currentIndex])
   useEffect(() => { accountBalanceRef.current = accountBalance }, [accountBalance])
   useEffect(() => { riskPercentRef.current = riskPercent }, [riskPercent])
@@ -955,7 +982,7 @@ export default function BacktestingPage() {
           status: (isWin ? 'win' : 'loss') as 'win'|'loss', 
           closeIndex: currentIndex, 
           pnl,
-          timestamp: fullData[trade.openIndex]?.timestamp,
+          timestamp: (fullData[trade.openIndex]?.timestamp || 0) + (kzOffset * 60 * 60 * 1000),
           screenshotUrl: '' // Will be populated asynchronously
         })
       } else {
@@ -1334,6 +1361,42 @@ export default function BacktestingPage() {
                 <option value={100}>5x (0.1s)</option>
                 <option value={10}>Max</option>
               </select>
+            </div>
+
+            {/* Go To Date */}
+            <div className={`relative ${fullData.length === 0 ? 'opacity-50 pointer-events-none' : ''}`}>
+              <button onClick={() => setShowGoTo(!showGoTo)}
+                className={`p-2 rounded-lg border transition-colors ${showGoTo ? 'bg-sky-50 border-sky-200 text-sky-600' : 'bg-white border-slate-200 text-slate-500 hover:text-slate-700'}`}
+                title="Go to Date">
+                <Calendar className="size-4" />
+              </button>
+
+              {showGoTo && (
+                <div className="absolute top-full mt-2 right-0 w-64 bg-white rounded-xl shadow-xl border border-slate-100 p-4 z-50">
+                  <div className="flex justify-between items-center mb-4">
+                    <h4 className="text-sm font-bold text-slate-700">Go to</h4>
+                    <button onClick={() => setShowGoTo(false)} className="text-slate-400 hover:text-slate-600"><X className="size-4" /></button>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Date</label>
+                      <input type="date" value={goToDate} onChange={e => setGoToDate(e.target.value)}
+                        className="w-full text-sm border-slate-200 rounded-lg focus:ring-sky-500 focus:border-sky-500" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Time (Optional)</label>
+                      <input type="time" value={goToTime} onChange={e => setGoToTime(e.target.value)}
+                        className="w-full text-sm border-slate-200 rounded-lg focus:ring-sky-500 focus:border-sky-500" />
+                    </div>
+                    
+                    <button onClick={handleGoTo} disabled={!goToDate}
+                      className="w-full mt-2 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-300 text-white font-bold py-2 rounded-lg text-sm transition-colors">
+                      Go to
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
