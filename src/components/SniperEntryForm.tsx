@@ -1,19 +1,28 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Target, CheckSquare, Square, Lock, CloudUpload, Trophy, Loader2, X as XIcon, ImageIcon, Calendar } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useToast } from "@/components/Toast"
 
-export default function SniperEntryForm({ className = "" }: { className?: string }) {
+export default function SniperEntryForm({ className = "", initialData = null }: { className?: string, initialData?: any }) {
   const { toast } = useToast()
-  const [direction, setDirection] = useState("BUY")
-  const [risk, setRisk] = useState("0.5")
-  const [outcome, setOutcome] = useState("PENDING")
+  const [direction, setDirection] = useState(initialData?.type === 'short' ? 'SELL' : 'BUY')
+  const [risk, setRisk] = useState("1")
+  const [outcome, setOutcome] = useState(initialData?.status === 'win' ? 'WIN' : initialData?.status === 'loss' ? 'LOSS' : 'PENDING')
   
   const [asset, setAsset] = useState("XAUUSD")
+  
+  const [entryPrice, setEntryPrice] = useState(initialData?.entryPrice ? Number(initialData.entryPrice).toFixed(2) : "")
+  const [stopLoss, setStopLoss] = useState(initialData?.slPrice ? Number(initialData.slPrice).toFixed(2) : "")
+  const [takeProfit, setTakeProfit] = useState(initialData?.tpPrice ? Number(initialData.tpPrice).toFixed(2) : "")
+  const [rrRatio, setRrRatio] = useState(initialData?.rr ? Number(initialData.rr).toFixed(2) : "")
   const [timeframe, setTimeframe] = useState("M1")
   const [entryDateDisplay, setEntryDateDisplay] = useState(() => {
+    if (initialData?.timestamp) {
+      const d = new Date(initialData.timestamp)
+      return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`
+    }
     const now = new Date()
     const thaiTime = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + (7 * 3600000))
     const d = thaiTime.getDate().toString().padStart(2, '0')
@@ -22,16 +31,16 @@ export default function SniperEntryForm({ className = "" }: { className?: string
     return `${d}/${m}/${y}`
   })
   const [entryTimeOnly, setEntryTimeOnly] = useState(() => {
+    if (initialData?.timestamp) {
+      const d = new Date(initialData.timestamp)
+      return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+    }
     const now = new Date()
     const thaiTime = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + (7 * 3600000))
     return thaiTime.toISOString().slice(11, 16)
   })
   const [preEmotion, setPreEmotion] = useState("CALM")
   const [duringEmotion, setDuringEmotion] = useState("PATIENT")
-  
-  const [entryPrice, setEntryPrice] = useState("")
-  const [stopLoss, setStopLoss] = useState("")
-  const [takeProfit, setTakeProfit] = useState("")
 
   const pips = useMemo(() => {
     const ep = parseFloat(entryPrice)
@@ -72,6 +81,19 @@ export default function SniperEntryForm({ className = "" }: { className?: string
   // Image Upload State
   const [files, setFiles] = useState<File[]>([])
   const [previewUrls, setPreviewUrls] = useState<string[]>([])
+
+  useEffect(() => {
+    if (initialData?.screenshotUrl && previewUrls.length === 0) {
+      fetch(initialData.screenshotUrl)
+        .then(res => res.blob())
+        .then(blob => {
+          const file = new File([blob], "backtest-snapshot.png", { type: "image/png" })
+          setFiles([file])
+          setPreviewUrls([initialData.screenshotUrl])
+        })
+        .catch(err => console.error("Error loading screenshot:", err))
+    }
+  }, [initialData])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {

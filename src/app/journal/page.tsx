@@ -434,8 +434,8 @@ export default function JournalPage() {
                             </div>
                           </td>
                           <td className="p-4 align-middle">
-                            <div className="text-slate-600 font-medium tabular-nums">{trade.entryPrice}</div>
-                            <div className="text-slate-400 text-xs mt-0.5 tabular-nums">→ {trade.takeProfit}</div>
+                            <div className="text-slate-600 font-medium tabular-nums">{trade.entryPrice ? Number(trade.entryPrice).toFixed(2) : '---'}</div>
+                            <div className="text-slate-400 text-xs mt-0.5 tabular-nums">→ {trade.takeProfit ? Number(trade.takeProfit).toFixed(2) : '---'}</div>
                           </td>
                           <td className="p-4 align-middle">
                             <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md uppercase tracking-wide">

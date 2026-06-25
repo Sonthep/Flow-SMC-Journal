@@ -16,6 +16,7 @@
     "@supabase/supabase-js": "^2.107.0",
     "@types/pg": "^8.20.0",
     "clsx": "^2.1.1",
+    "html-to-image": "^1.11.13",
     "jsdom": "^29.1.1",
     "klinecharts": "^9.8.12",
     "lightweight-charts": "^5.2.0",

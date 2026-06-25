@@ -7,9 +7,10 @@ import SniperEntryForm from "@/components/SniperEntryForm"
 interface Props {
   isOpen: boolean
   onClose: () => void
+  initialData?: any
 }
 
-export default function AddTradeSlideOver({ isOpen, onClose }: Props) {
+export default function AddTradeSlideOver({ isOpen, onClose, initialData }: Props) {
   const [mounted, setMounted] = useState(false)
   
   useEffect(() => {
@@ -50,7 +51,7 @@ export default function AddTradeSlideOver({ isOpen, onClose }: Props) {
         
         {/* Content Area - Scrollable */}
         <div className="p-6 flex-1 overflow-y-auto">
-          <SniperEntryForm className="border border-slate-200 shadow-sm p-6 bg-white rounded-2xl" />
+          <SniperEntryForm className="border border-slate-200 shadow-sm p-6 bg-white rounded-2xl" initialData={initialData} />
         </div>
         
       </div>

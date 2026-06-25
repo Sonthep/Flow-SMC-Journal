@@ -9,6 +9,8 @@ import {
   ChevronRight, BarChart2, Type, Lock, Unlock
 } from "lucide-react"
 import { init, dispose, Chart, KLineData, registerOverlay, registerIndicator } from "klinecharts"
+import * as htmlToImage from "html-to-image"
+import AddTradeSlideOver from "@/components/AddTradeSlideOver"
 
 // Register custom Killzone Box overlay
 registerOverlay({
@@ -150,12 +152,13 @@ registerIndicator({
   shortName: 'KZ',
   calc: (dataList, indicator) => {
     const kzOffset = (indicator.calcParams && indicator.calcParams[0]) || 0
+    // Bangkok Time (UTC+7) - Summer/DST mappings
     const kzSessions = [
-      { id: 'asia', name: 'Asia', start: 20*60, end: 24*60, color: 'rgba(59,130,246,0.1)', pivotColor: '#3b82f6' },
-      { id: 'london', name: 'London', start: 2*60, end: 5*60, color: 'rgba(239,68,68,0.1)', pivotColor: '#ef4444' },
-      { id: 'nyam', name: 'NY AM', start: 9*60+30, end: 11*60, color: 'rgba(34,197,94,0.1)', pivotColor: '#22c55e' },
-      { id: 'nylu', name: 'NY Lunch', start: 12*60, end: 13*60, color: 'rgba(250,204,21,0.1)', pivotColor: '#facc15' },
-      { id: 'nypm', name: 'NY PM', start: 13*60+30, end: 16*60, color: 'rgba(168,85,247,0.1)', pivotColor: '#a855f7' }
+      { id: 'nypm', name: 'NY PM', start: 30, end: 3*60, color: 'rgba(168,85,247,0.1)', pivotColor: '#a855f7' }, // 00:30 - 03:00
+      { id: 'asia', name: 'Asia', start: 7*60, end: 11*60, color: 'rgba(59,130,246,0.1)', pivotColor: '#3b82f6' }, // 07:00 - 11:00
+      { id: 'london', name: 'London', start: 13*60, end: 16*60, color: 'rgba(239,68,68,0.1)', pivotColor: '#ef4444' }, // 13:00 - 16:00
+      { id: 'nyam', name: 'NY AM', start: 20*60+30, end: 22*60, color: 'rgba(34,197,94,0.1)', pivotColor: '#22c55e' }, // 20:30 - 22:00
+      { id: 'nylu', name: 'NY Lunch', start: 23*60, end: 24*60, color: 'rgba(250,204,21,0.1)', pivotColor: '#facc15' } // 23:00 - 00:00
     ]
 
     const sessions: any[] = []
@@ -706,6 +709,7 @@ const cloneOverlayState = (overlay: any) => {
 export default function BacktestingPage() {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<Chart | null>(null)
+  const mainRef = useRef<HTMLElement>(null)
   const actionHistoryRef = useRef<any[]>([])  // stack of actions for true Undo
 
   // --- Refs to prevent stale closures in onDrawEnd callback ---
@@ -727,7 +731,7 @@ export default function BacktestingPage() {
   
   // ICT Killzones
   const [showKillzones, setShowKillzones] = useState(false)
-  const [kzOffset, setKzOffset] = useState(0)
+  const [kzOffset, setKzOffset] = useState(4)
 
   // SMC
   const [showSMC, setShowSMC] = useState(false)
@@ -744,6 +748,7 @@ export default function BacktestingPage() {
   const [riskPercent, setRiskPercent] = useState(1.0)
   const [activeTrades, setActiveTrades] = useState<Trade[]>([])
   const [tradeHistory, setTradeHistory] = useState<Trade[]>([])
+  const [tradeToLog, setTradeToLog] = useState<any>(null)
 
   // Keep refs in sync with state
   useEffect(() => { currentIndexRef.current = currentIndex }, [currentIndex])
@@ -859,7 +864,7 @@ export default function BacktestingPage() {
     
     if (showKillzones && fullData.length > 0) {
       chartRef.current.createIndicator(
-        { name: 'ICT_Killzones', calcParams: [kzOffset] },
+        { name: 'ICT_Killzones', calcParams: [0] }, // Offset is now applied directly to timestamps
         true, // isStack = true -> draw on main pane
         { id: 'candle_pane' }
       )
@@ -884,11 +889,15 @@ export default function BacktestingPage() {
   // ─── Update chart data ─────────────────────────────────────────────────────
   useEffect(() => {
     if (chartRef.current && fullData.length > 0) {
-      const visibleData = fullData.slice(0, currentIndex + 1)
+      const offsetMs = kzOffset * 60 * 60 * 1000
+      const visibleData = fullData.slice(0, currentIndex + 1).map(d => ({
+        ...d,
+        timestamp: d.timestamp + offsetMs
+      }))
       chartRef.current.applyNewData(visibleData)
       chartRef.current.scrollToRealTime()
     }
-  }, [currentIndex, fullData])
+  }, [currentIndex, fullData, kzOffset])
 
   // ─── Playback loop & Trade Evaluation ───────────────────────────────────────
   useEffect(() => {
@@ -938,11 +947,14 @@ export default function BacktestingPage() {
       if (isWin || isLoss) {
         const pnl = isWin ? (trade.riskAmount * trade.rr) : -trade.riskAmount
         pnlDelta += pnl
+        
         closed.push({ 
           ...trade, 
           status: (isWin ? 'win' : 'loss') as 'win'|'loss', 
           closeIndex: currentIndex, 
-          pnl 
+          pnl,
+          timestamp: fullData[trade.openIndex]?.timestamp,
+          screenshotUrl: '' // Will be populated asynchronously
         })
       } else {
         remaining.push(trade)
@@ -955,6 +967,32 @@ export default function BacktestingPage() {
       setActiveTrades(remaining)
       setTradeHistory(h => [...closed, ...h])
       setAccountBalance(b => b + pnlDelta)
+      
+      // Auto pop-up the logging form and pause playback
+      setIsPlaying(false)
+      
+      // Capture full screen with html-to-image asynchronously
+      setTimeout(async () => {
+        let finalScreenshotUrl = ''
+        if (mainRef.current) {
+          try {
+            finalScreenshotUrl = await htmlToImage.toPng(mainRef.current, { 
+              backgroundColor: isDark ? '#0f172a' : '#f8fafc',
+              pixelRatio: 1 // Keep resolution reasonable
+            })
+          } catch (e) {
+            console.error("html-to-image error:", e)
+          }
+        }
+        
+        const closedTradeToLog = { ...closed[0], screenshotUrl: finalScreenshotUrl }
+        setTradeToLog(closedTradeToLog)
+        
+        // Update trade history with the screenshot so "LOG IT" button works later
+        if (finalScreenshotUrl) {
+          setTradeHistory(h => h.map(t => t.id === closedTradeToLog.id ? closedTradeToLog : t))
+        }
+      }, 100)
     }
   }, [currentIndex, fullData])
 
@@ -965,7 +1003,8 @@ export default function BacktestingPage() {
     const parsedData: KLineData[] = []
 
     const headerLine = lines[0]?.trim().toLowerCase() || ''
-    const headers = headerLine.split(',')
+    const delimiter = headerLine.includes('\t') ? '\t' : ','
+    const headers = headerLine.split(delimiter)
     const hasSeparateTime = headers.length > 1 &&
       (headers[1] === 'time' || (headers[1] !== 'open' && headers[1].includes('time')))
 
@@ -975,7 +1014,7 @@ export default function BacktestingPage() {
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim()
       if (!line) continue
-      const cols = line.split(',')
+      const cols = line.split(delimiter)
       if (cols.length < cCol + 1) continue
       try {
         let rawDate = (cols[dateCol]?.trim() || '').replace(/\./g, '-')
@@ -1241,7 +1280,7 @@ export default function BacktestingPage() {
   return (
     <>
       <Header />
-      <main className="p-4 sm:p-6 lg:p-8 max-w-[1600px] w-full mx-auto flex-1 flex flex-col overflow-hidden h-[calc(100vh-80px)]">
+      <main ref={mainRef} className="p-4 sm:p-6 lg:p-8 max-w-[1600px] w-full mx-auto flex-1 flex flex-col overflow-hidden h-[calc(100vh-80px)]">
 
         {/* ── Top bar ──────────────────────────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 shrink-0 gap-4">
@@ -1379,7 +1418,7 @@ export default function BacktestingPage() {
                       ? 'bg-sky-500 text-white shadow-sm' 
                       : isDark ? 'text-white/50 hover:text-white hover:bg-white/10' : 'text-slate-500 hover:bg-slate-100'
                   }`}>
-                  ICT Killzones
+                  ICT Killzones (BKK)
                 </button>
                 
                 {showKillzones && (
@@ -1389,8 +1428,8 @@ export default function BacktestingPage() {
                     className={`text-xs font-bold px-2 py-1 rounded outline-none cursor-pointer ${
                       isDark ? 'bg-white/10 text-white/80 border-none' : 'bg-white text-slate-600 border border-slate-200'
                     }`}
-                    title="Adjust timezone offset for killzones">
-                    <option value={0}>Chart Time</option>
+                    title="Adjust timezone offset to match BKK (e.g., MT5 is usually +4h to BKK)">
+                    <option value={0}>Chart Time = BKK</option>
                     {[-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,1,2,3,4,5,6,7,8,9,10,11,12].map(h => (
                       <option key={h} value={h}>{h > 0 ? '+' : ''}{h}h</option>
                     ))}
@@ -1660,6 +1699,9 @@ export default function BacktestingPage() {
                           <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-md border border-slate-200">
                             RR {trade.rr?.toFixed(2) || '0.00'}
                           </span>
+                          <button onClick={() => setTradeToLog(trade)} className="ml-1 text-[9px] font-bold text-sky-600 bg-sky-50 hover:bg-sky-100 px-2 py-0.5 rounded-md border border-sky-200 transition-colors">
+                            LOG IT
+                          </button>
                         </div>
                         <div className={`text-xs font-bold ${trade.pnl && trade.pnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
                           {trade.pnl && trade.pnl >= 0 ? '+' : ''}{trade.pnl?.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
@@ -1679,6 +1721,7 @@ export default function BacktestingPage() {
           </div>
         </div>
       </main>
+      <AddTradeSlideOver isOpen={!!tradeToLog} onClose={() => setTradeToLog(null)} initialData={tradeToLog} />
     </>
   )
 }
